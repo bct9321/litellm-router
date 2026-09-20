@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "description": "Immutable raw source checksums; working_copy identifies initial provenance, not perpetual equality.",
+  "sources": [
+    {
+      "path": "raw/benchmark-classifiers.py",
+      "sha256": "bed53263bb6c7bc7e3a4163ad54105b0cde6ad10796a14911c47434ac316722f",
+      "ingested": "2026-09-20",
+      "working_copy": "tools/benchmark-classifiers.py"
+    },
+    {
+      "path": "raw/config.yaml",
+      "sha256": "1f60ecf5239c344cfd88d9ad21fc65cd8f48e608b4df0ce37990118569ae5a0d",
+      "ingested": "2026-09-20",
+      "working_copy": "router/config.yaml"
+    },
+    {
+      "path": "raw/discover-free-models.py",
+      "sha256": "0e03269bef92258d9ed816d7a2a414fe5f4da563d7129e57d374758b7c1f0c8b",
+      "ingested": "2026-09-20",
+      "working_copy": "tools/discover-free-models.py"
+    },
+    {
+      "path": "raw/jev_classifier.py",
+      "sha256": "0cd362c2d31eca1e35fb3931f41b95d5300ccac8eb353254e76dd30e11b59ed2",
+      "ingested": "2026-09-20",
+      "working_copy": "router/jev_classifier.py"
+    },
+    {
+      "path": "raw/notes/2026-09-20-workspace-bootstrap.md",
+      "sha256": "77630b9d1be9b68ab56bc32e89420b39d2e31cc608d7f59fe9e31c848a74858a",
+      "ingested": "2026-09-20"
+    },
+    {
+      "path": "raw/openrouter_quota_guard.py",
+      "sha256": "fca07db9ddad30879d25ce6f1e1e91e965a6d1e3027f925a918fa61ae5494331",
+      "ingested": "2026-09-20",
+      "working_copy": "router/openrouter_quota_guard.py"
+    },
+    {
+      "path": "raw/test-models.py",
+      "sha256": "6d11217518547628669c6669a29f8d568a8935e99be1a58d7d9df49569db6e18",
+      "ingested": "2026-09-20",
+      "working_copy": "tools/test-models.py"
+    }
+  ]
+}
