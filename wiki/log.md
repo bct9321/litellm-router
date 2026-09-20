@@ -36,3 +36,13 @@ Append new entries below. Preserve prior entries; record corrections explicitly.
   and GitHub CI execution are not established by the offline check.
 - Connected the local repository to the user-supplied empty GitHub remote.
 - Open implementation issues remain Q001–Q012; see [open questions](open-questions.md).
+
+## [2026-09-20] publish | GitHub bootstrap verified
+
+- Published bootstrap commit `ecf93825463df39ba9af266d5122e632ac3037f4` to `main`
+  in [bct9321/litellm-router](https://github.com/bct9321/litellm-router).
+- [GitHub Workspace integrity run](https://github.com/bct9321/litellm-router/actions/runs/35516656699)
+  completed successfully on the published bootstrap. Local working tree was clean
+  before this receipt was appended.
+- This confirms the offline checks also pass on GitHub's Linux runner, including
+  preserved raw hashes. Deployment and live inference remain outside this verification.
