@@ -26,17 +26,24 @@ Static/specialized Hermes tasks should bypass this router where appropriate:
     compression -> long-context free model
 
 Jev only CLASSIFIES the request.
-The actual solver models remain free OpenRouter models.
+The solver routes are free-first with configured paid fallbacks.
 """
 
 from __future__ import annotations
 
 import os
-import re
+import asyncio
+import math
+import json
+import uuid
+from pathlib import Path
 import time
 from typing import Any, Mapping, Sequence
 
 import httpx
+
+from router.spend_ledger import Ledger, BudgetDenied, usd_nanos
+from router.cost_policy import Candidate, candidate_is_eligible, request_charge, decisions_charge, validate_contract, validate_policy, policy_revision
 
 
 # ============================================================================
@@ -55,6 +62,57 @@ TIERS = (
 )
 
 
+class JevAccounting:
+    """Optional strict accounting for a classifier endpoint with a known bound."""
+    def __init__(self):
+        config_path = os.getenv("COST_ROUTER_CONFIG")
+        self.ledger = None
+        self.contract = None
+        if config_path:
+            config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+            validate_policy(config)
+            self.ledger = Ledger(config["ledger"], config["limits"],
+                                 billing_scope=config.get("billing_scope", "router-only"),
+                                 coverage_mode=config.get("coverage_mode", "router-only"),
+                                 policy_revision=policy_revision(config))
+            self.contract = config.get("classifier")
+            if not config.get("routes", {}).get("jev", {}).get("candidates"):
+                raise ValueError("Strict classifier requires routes.jev candidates")
+            if not self.contract:
+                raise ValueError("Cost-aware mode requires a bounded classifier contract")
+            validate_contract(self.contract, surface='decisions')
+            if not isinstance(self.contract.get('provider_model'), str) or not self.contract['provider_model']:
+                raise ValueError('Strict classifier requires a contracted provider model')
+            self.endpoint = self.contract['origin'].rstrip('/') + self.contract['path']
+
+    def reserve(self, request_id=None, request_payload=None):
+        if not self.ledger:
+            return None
+        attempt = str(uuid.uuid4())
+        if not request_id:
+            raise BudgetDenied('Strict classifier requires server logical request identity')
+        logical_request = request_id
+        estimate, bound = decisions_charge(self.contract, request_payload)
+        self.ledger.reserve(attempt, logical_request, self.contract["canonical"], "jev",
+                            self.contract.get("deployment", "jev"), bound, estimate,
+                            kind="classifier", entry_alias="jev", provider_model=request_payload["model"],
+                            contract_revision=self.contract["revision"])
+        return attempt
+
+    def settle(self, attempt, response=None):
+        if not attempt:
+            return
+        cost = None
+        if response is not None:
+            try:
+                usage = response.json().get("usage") or {}
+                cost = usd_nanos(usage.get("cost"))
+            except (ValueError, AttributeError, TypeError):
+                pass
+        self.ledger.settle(attempt, attempt + ":classifier:" + str(cost), cost,
+                           "provider-reported" if cost is not None else "unknown")
+
+
 # ============================================================================
 # FALLBACK
 # ============================================================================
@@ -71,18 +129,6 @@ if FAIL_TIER not in TIERS:
 # ============================================================================
 # FILTERS
 # ============================================================================
-
-_RUNTIME_METADATA_RE = re.compile(
-    r"("
-    r"runtime context|"
-    r"runtime-generated|"
-    r"chat_id|"
-    r"message_id|"
-    r"inbound_event_kind"
-    r")",
-    re.IGNORECASE,
-)
-
 
 # ============================================================================
 # MESSAGE NORMALIZATION
@@ -230,6 +276,9 @@ def _classification_transcript(
         )
     )
 
+    if max_messages <= 0 or max_chars <= 0:
+        raise ValueError("Transcript limits must be positive")
+
     useful: list[tuple[str, str]] = []
 
     for message in _extract_messages(context):
@@ -257,12 +306,8 @@ def _classification_transcript(
         if not text:
             continue
 
-        # Ignore obvious Hermes/runtime metadata injected as user text.
-        if (
-            role == "user"
-            and _RUNTIME_METADATA_RE.search(text)
-        ):
-            continue
+        # User text is not a reliable metadata discriminator. Keep it even when
+        # it discusses runtime fields; tool-role records are excluded above.
 
         if len(text) > max_chars:
             text = (
@@ -345,6 +390,15 @@ class OpenRouterJevClassifier:
                 "5.0",
             )
         )
+        if not math.isfinite(self.timeout) or self.timeout <= 0:
+            raise ValueError("JEV_TIMEOUT_SECONDS must be finite and positive")
+        self.accounting = JevAccounting()
+        if self.accounting.contract:
+            self.model = self.accounting.contract["provider_model"]
+        self.cost_config = None
+        config_path = os.getenv("COST_ROUTER_CONFIG")
+        if config_path:
+            self.cost_config = json.loads(Path(config_path).read_text(encoding="utf-8"))
 
         # Raw answer logging.
         #
@@ -391,9 +445,17 @@ class OpenRouterJevClassifier:
     async def classify(
         self,
         context: Any,
+        *,
+        diagnostics: dict | None = None,
     ) -> str:
 
+        if diagnostics is None:
+            diagnostics = {}
+        diagnostics.update(ok=False, cost=None, cost_kind='unknown', prediction=None)
+
         classify_start = time.perf_counter()
+        attempt = None
+        strict_model_selection = bool(self.cost_config)
 
         # --------------------------------------------------------------------
         # OpenRouter API key
@@ -411,7 +473,7 @@ class OpenRouterJevClassifier:
             )
 
             print(
-                f"[JEV ROUTER] using fallback tier={FAIL_TIER}",
+                f"[JEV ROUTER] using fallback tier={self._fallback_choice(context, '')}",
                 flush=True,
             )
 
@@ -431,15 +493,17 @@ class OpenRouterJevClassifier:
                     flush=True,
                 )
 
-            return FAIL_TIER
+            return self._fallback_choice(context, '')
 
         # --------------------------------------------------------------------
         # Build transcript
         # --------------------------------------------------------------------
 
-        transcript = _classification_transcript(
-            context
-        )
+        try:
+            transcript = _classification_transcript(context)
+        except (ValueError, TypeError, AttributeError):
+            print("[JEV ROUTER] invalid transcript input/configuration", flush=True)
+            return self._fallback_choice(context, '')
 
         if not transcript:
 
@@ -448,10 +512,8 @@ class OpenRouterJevClassifier:
                 flush=True,
             )
 
-            print(
-                f"[JEV ROUTER] using fallback tier={FAIL_TIER}",
-                flush=True,
-            )
+            fallback = self._fallback_choice(context, transcript)
+            print(f"[JEV ROUTER] using fallback tier={fallback}", flush=True)
 
             if self.log_timing:
                 total_latency = (
@@ -469,11 +531,17 @@ class OpenRouterJevClassifier:
                     flush=True,
                 )
 
-            return FAIL_TIER
+            return fallback
 
         # ====================================================================
         # JEV DECISION REQUEST
         # ====================================================================
+
+        eligible_models = self._eligible_models(context, transcript)
+        # A classifier-only bounded contract preserves the legacy tier API;
+        # strict model choice activates when the policy supplies model routes.
+        if strict_model_selection and not eligible_models:
+            raise BudgetDenied('Strict Jev mode has no eligible priced/capability-compatible model')
 
         payload = {
 
@@ -620,6 +688,15 @@ class OpenRouterJevClassifier:
             },
         }
 
+        if strict_model_selection:
+            payload['state']['description'] = (
+                'Select exactly one model from the server-owned eligible_models list. '
+                'Use capability requirements and current remaining budgets; never invent a model or price.'
+            )
+            payload['state']['eligible_models'] = eligible_models
+            payload['questions'] = {'model': {'type': 'choice', 'instructions': 'Choose one eligible model alias.',
+                                              'criteria': {row['alias']: row for row in eligible_models}}}
+
         # ====================================================================
         # CALL OPENROUTER DECISIONS API
         # ====================================================================
@@ -628,12 +705,24 @@ class OpenRouterJevClassifier:
 
             jev_start = time.perf_counter()
 
+            metadata = context.get('metadata', {}) if isinstance(context, Mapping) else getattr(context, 'metadata', {})
+            if strict_model_selection:
+                from router.cost_transport import get_request_context
+                request_id = get_request_context(metadata)['id']
+            else:
+                request_id = None
+            if self.accounting.contract:
+                payload['max_tokens'] = self.accounting.contract['max_output_tokens']
+            attempt = self.accounting.reserve(request_id, payload)
             async with httpx.AsyncClient(
-                timeout=self.timeout
+                timeout=self.timeout, follow_redirects=False, trust_env=False
             ) as client:
 
+                if self.accounting.contract:
+                    # Reservation may wait for a database lock past quote expiry.
+                    validate_contract(self.accounting.contract, surface='decisions')
                 response = await client.post(
-                    "https://openrouter.ai/api/alpha/decisions",
+                    self.accounting.endpoint if strict_model_selection else os.getenv("JEV_DECISIONS_URL", "https://openrouter.ai/api/alpha/decisions"),
 
                     headers={
                         "Authorization": f"Bearer {api_key}",
@@ -642,6 +731,7 @@ class OpenRouterJevClassifier:
 
                     json=payload,
                 )
+            self.accounting.settle(attempt, response)
 
             jev_latency = (
                 time.perf_counter()
@@ -662,6 +752,18 @@ class OpenRouterJevClassifier:
             # Show actual OpenRouter error response.
             # ----------------------------------------------------------------
 
+            try:
+                result = response.json()
+                usage = result.get('usage') or {}
+                raw_cost = usage.get('cost') if isinstance(usage, Mapping) else None
+                if raw_cost is not None and not isinstance(raw_cost, bool):
+                    cost = float(raw_cost)
+                    if math.isfinite(cost) and cost >= 0:
+                        diagnostics.update(cost=cost, cost_kind='provider-reported')
+                diagnostics.update(provider_id=result.get('id'), model=result.get('model', self.model))
+            except (ValueError, TypeError, AttributeError):
+                result = {}
+
             if response.is_error:
 
                 print(
@@ -674,17 +776,12 @@ class OpenRouterJevClassifier:
 
                 response.raise_for_status()
 
-            result = response.json()
-
             # =================================================================
             # RAW DIAGNOSTICS
             # =================================================================
 
-            raw_answer = (
-                result
-                .get("answers", {})
-                .get("tier")
-            )
+            answer_key = 'model' if strict_model_selection else 'tier'
+            raw_answer = result.get('answers', {}).get(answer_key)
 
             if self.log_raw_answer:
 
@@ -700,7 +797,7 @@ class OpenRouterJevClassifier:
             answer = (
                 result
                 .get("answers", {})
-                .get("tier", {})
+                .get(answer_key, {})
             )
 
             choice = answer.get(
@@ -728,15 +825,22 @@ class OpenRouterJevClassifier:
                     or ""
                 )
 
-            choice = str(
-                choice or ""
-            ).strip().upper()
+            raw_choice = str(choice or '').strip()
+            if strict_model_selection:
+                aliases = {row['alias'].upper(): row['alias'] for row in eligible_models}
+                choice = aliases.get(raw_choice.upper(), '')
+            else:
+                choice = raw_choice.upper()
 
             # =================================================================
             # VALIDATE
             # =================================================================
 
-            if choice in TIERS:
+            current_models = self._eligible_models(context, transcript) if strict_model_selection else []
+            valid_choices = {row['alias'] for row in current_models} if strict_model_selection else set(TIERS)
+            if choice in valid_choices:
+
+                diagnostics.update(ok=True, prediction=choice)
 
                 total_latency = (
                     time.perf_counter()
@@ -746,7 +850,7 @@ class OpenRouterJevClassifier:
                 print(
                     (
                         "[JEV ROUTER] "
-                        f"selected tier={choice} "
+                        f"selected {'model' if strict_model_selection else 'tier'}={choice} "
                         f"confidence={confidence}"
                     ),
                     flush=True,
@@ -760,7 +864,7 @@ class OpenRouterJevClassifier:
                             f"jev_api_latency={jev_latency:.3f}s "
                             f"local_overhead={max(0.0, total_latency - jev_latency):.3f}s "
                             f"result=SUCCESS "
-                            f"tier={choice}"
+                            f"{'model' if strict_model_selection else 'tier'}={choice}"
                         ),
                         flush=True,
                     )
@@ -788,7 +892,12 @@ class OpenRouterJevClassifier:
         # ERRORS
         # ====================================================================
 
+        except asyncio.CancelledError:
+            self.accounting.settle(attempt)
+            raise
+
         except httpx.HTTPStatusError as exc:
+            self.accounting.settle(attempt)
 
             print(
                 (
@@ -800,6 +909,7 @@ class OpenRouterJevClassifier:
             )
 
         except httpx.TimeoutException as exc:
+            self.accounting.settle(attempt)
 
             print(
                 f"[JEV ROUTER] timeout: {exc}",
@@ -807,6 +917,7 @@ class OpenRouterJevClassifier:
             )
 
         except httpx.HTTPError as exc:
+            self.accounting.settle(attempt)
 
             print(
                 (
@@ -822,6 +933,7 @@ class OpenRouterJevClassifier:
             TypeError,
             AttributeError,
         ) as exc:
+            self.accounting.settle(attempt)
 
             print(
                 (
@@ -840,10 +952,8 @@ class OpenRouterJevClassifier:
             - classify_start
         )
 
-        print(
-            f"[JEV ROUTER] using fallback tier={FAIL_TIER}",
-            flush=True,
-        )
+        fallback = self._fallback_choice(context, transcript)
+        print(f"[JEV ROUTER] using fallback tier={fallback}", flush=True)
 
         if self.log_timing:
             print(
@@ -851,12 +961,77 @@ class OpenRouterJevClassifier:
                     "[JEV ROUTER] "
                     f"total_classifier_latency={total_latency:.3f}s "
                     "result=FALLBACK "
-                    f"tier={FAIL_TIER}"
+                    f"tier={fallback}"
                 ),
                 flush=True,
             )
 
-        return FAIL_TIER
+        return fallback
+
+    def _fallback_choice(self, context, transcript):
+        """Return only a currently eligible configured fallback in strict mode."""
+        if not self.cost_config:
+            return FAIL_TIER
+        rows = self._eligible_models(context, transcript)
+        if not rows:
+            raise BudgetDenied('Strict Jev fallback has no eligible model')
+        return rows[0]['alias']
+
+    def _eligible_models(self, context, transcript):
+        """Build the server-owned Jev choice set from current ledger capacity."""
+        if not self.cost_config:
+            return []
+        routes = self.cost_config.get('routes', {})
+        route = routes.get('jev')
+        candidate_rows = route.get('candidates', []) if route else []
+        if not candidate_rows:
+            raise BudgetDenied('Strict Jev requires configured candidates')
+        metadata = context.get('metadata', {}) if isinstance(context, Mapping) else getattr(context, 'metadata', {})
+        from router.cost_transport import get_request_context
+        trusted = get_request_context(metadata)
+        if trusted['policy_revision'] != policy_revision(self.cost_config):
+            raise BudgetDenied('request_policy_revision_mismatch')
+        route_required = route.get('required_capabilities', []) if isinstance(route, Mapping) else []
+        required = frozenset(route_required) | trusted['required_capabilities']
+        request_payload = trusted['payload']
+        report = self.accounting.ledger.report()
+        request_remaining = self.accounting.ledger.request_remaining(trusted['id'])
+        result = []
+        for row in candidate_rows:
+            capabilities = frozenset(row.get('capabilities', []))
+            contract = self.cost_config.get('contracts', {}).get(row.get('contract'))
+            if not contract:
+                continue
+            try:
+                charges = []
+                for identifier in row.get('deployment_ids', []):
+                    if identifier not in trusted['allowed_deployments'] or identifier in trusted['failed_deployments']:
+                        continue
+                    deployment = self.cost_config['deployments'][identifier]
+                    if deployment['free'] and trusted['free_unavailable']:
+                        continue
+                    outgoing = dict(request_payload, model=deployment['provider_model'])
+                    charges.append(request_charge(contract, outgoing))
+                if not charges:
+                    continue
+                estimate = max(charge[0] for charge in charges)
+                bound = max(charge[1] for charge in charges)
+            except (ValueError, KeyError):
+                continue
+            candidate = Candidate(alias=row['alias'], canonical=row['canonical'], capabilities=capabilities,
+                                  free=bool(row.get('free')), estimate=estimate, bound=bound)
+            if bound <= request_remaining and candidate_is_eligible(candidate, required, report):
+                model = report['models'].get(row['canonical'])
+                result.append({'alias': row['alias'], 'canonical': row['canonical'],
+                               'capabilities': sorted(capabilities), 'free': bool(row.get('free')),
+                               'estimate': estimate, 'bound': bound,
+                               'remaining_today': model['today']['remaining'] if model else None,
+                               'remaining_month': model['month']['remaining'] if model else None,
+                               'remaining_request': request_remaining,
+                               'remaining_overall_today': report['overall']['today']['remaining'],
+                               'remaining_overall_month': report['overall']['month']['remaining']})
+        free = [item for item in result if item['free']]
+        return sorted(free or result, key=lambda item: (item['estimate'], item['alias']))
 
     # ========================================================================
     # CALLABLE INTERFACE

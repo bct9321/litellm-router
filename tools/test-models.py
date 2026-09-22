@@ -681,12 +681,12 @@ def extract_headers(
         "fallbacks": safe_int(
             headers.get(
                 "x-litellm-attempted-fallbacks"
-            )
+            ), None
         ),
         "retries": safe_int(
             headers.get(
                 "x-litellm-attempted-retries"
-            )
+            ), None
         ),
         "fallback_errors": headers.get(
             "x-litellm-fallback-errors"
@@ -1218,7 +1218,7 @@ def capability_vision(
                             "type": "text",
                             "text": (
                                 "Identify the dominant color. "
-                                "End with exactly FINAL=red"
+                                "End with FINAL=<color-name>."
                             ),
                         },
                         {
@@ -1543,6 +1543,11 @@ def evaluate_alias(
         fallback_count / RUNS
     )
 
+    fallback_diagnostics_coverage = (
+        sum(result.get("diag", {}).get("fallbacks") is not None for result in successful) / len(successful)
+        if successful else 0.0
+    )
+
     direct_count = sum(
         1
         for result in successful
@@ -1601,6 +1606,13 @@ def evaluate_alias(
 
     failures: list[str] = []
     warnings: list[str] = []
+
+    missing_diagnostics = sum(
+        result.get("diag", {}).get("fallbacks") is None
+        for result in successful
+    )
+    if missing_diagnostics:
+        failures.append(f"fallback diagnostics unknown for {missing_diagnostics} successful request(s)")
 
     if (
         success_rate
@@ -1709,6 +1721,7 @@ def evaluate_alias(
         "runs": RUNS,
         "success_rate": success_rate,
         "fallback_rate": fallback_rate,
+        "fallback_diagnostics_coverage": fallback_diagnostics_coverage,
         "direct_rate": direct_rate,
         "p50": p50,
         "p95": p95,

@@ -1,6 +1,15 @@
 # Project wiki
 
-Status: source-ingested baseline, 2026-09-20; runtime integration remains unverified.
+Status: implementation resumed, 2026-09-21. The immutable bootstrap sources remain
+preserved; current behavior is defined by working code and named verification.
+
+Start with the [review and delivery plan](router-delivery-plan.md) and latest
+[log](log.md). The [execution authorization](../raw/notes/2026-09-21-router-plan-execution.md)
+resumes bounded subagent implementation. Strict loopback dispatch, accounting and
+classifier controls passed 53 focused tests, 19 real-proxy routing scenarios and
+10 budget/recovery scenarios, plus two consecutive clean independent reviews.
+See the [immutable receipt](../raw/notes/2026-09-21-local-delivery-receipt.md). Live billing bounds and deployment
+remain unverified. Host goal status is controlled by the app.
 
 ## Understand the router
 
@@ -8,6 +17,7 @@ Status: source-ingested baseline, 2026-09-20; runtime integration remains unveri
 - [Routing policy](routing.md): eight tiers, aliases, fallbacks, and targets.
 - [Jev classifier](classifier.md): transcript selection and failure behavior.
 - [Quota guard](quota-guard.md): quota lookup, paid rewrites, and response headers.
+- [Cost awareness](cost-awareness.md): researched proposal for estimates, spend visibility, budgets, and router comparisons.
 - [Evaluation](evaluation.md): discovery, route health, and classifier benchmarking.
 - [Vocabulary](../CONTEXT.md): shared domain terms.
 

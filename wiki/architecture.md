@@ -1,12 +1,20 @@
 # Router architecture
 
-Status: observed source design, 2026-09-20; deployment unverified.
+Status: imported design below retained as historical context; strict local implementation update 2026-09-21 follows. Live deployment remains unverified.
 Sources: [config](../raw/config.yaml), [classifier](../raw/jev_classifier.py),
 [quota guard](../raw/openrouter_quota_guard.py).
 Working copies: [router config](../router/config.yaml),
 [classifier plugin](../router/jev_classifier.py), [quota plugin](../router/openrouter_quota_guard.py).
 
-## Request path
+## Current strict local architecture
+
+The [execution contract](../raw/notes/2026-09-21-router-plan-execution.md) and [current call flow](router-delivery-plan.md) supersede the imported flow for cost-aware mode. LiteLLM 1.99.0 owns proxy handling, deployment selection and fallback. Its custom callback/plugin facilities are reused; the added SQLite ledger and final HTTP transport gate supply verified gaps in atomic reservation, canonical identity and incomplete-charge retention.
+
+The cost callback captures server-owned request identity before quota rewriting. Quota exhaustion may permit a paid target, but every actual solver dispatch still validates original capabilities, allowed deployment, free-first, exact endpoint/model and a dated supported billing contract. Jev's separate HTTP call uses the same logical request budget. All paid calls reserve before HTTP; only proven final usage releases excess capacity. Strict mode supports bounded loopback text chat and Decisions fixtures only. The process-local trusted context is bounded and expires; spend state persists across processes and restarts in SQLite.
+
+`COST_ROUTER_CONFIG` activates this mode. Without it, imported legacy routing remains active without a strict-budget guarantee. Historical OpenRouter aggregates are optional offline evidence with explicit scope/coverage, not automatically presumed local spend. See [cost awareness](cost-awareness.md) and [operations](operations.md).
+
+## Imported request path (historical)
 
 ```mermaid
 flowchart TD

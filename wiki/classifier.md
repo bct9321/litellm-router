@@ -1,59 +1,88 @@
 # Jev classification
 
-Status: observed source behavior, 2026-09-20.
-Source: [jev_classifier.py](../raw/jev_classifier.py), especially
-`_classification_transcript`, `OpenRouterJevClassifier.classify`, and `FAIL_TIER`.
+Status: locally verified implementation, 2026-09-21; final proof and two clean
+independent reviews retained in the [receipt](../raw/notes/2026-09-21-local-delivery-receipt.md). Sources: [working classifier](../router/jev_classifier.py),
+[cost policy](../router/cost_policy.py), [dispatch boundary](../router/cost_transport.py),
+[delivery contract](../raw/notes/2026-09-21-cost-aware-router-contract.md), and
+[execution authorization](../raw/notes/2026-09-21-router-plan-execution.md).
+The [imported classifier](../raw/jev_classifier.py) remains historical evidence;
+its former metadata filtering is not current behavior.
 
-## Input and choice
+## Transcript and legacy mode
 
-The plugin accepts object or mapping contexts using `structured_messages` or
-`raw_messages`. It extracts text, keeps system/user/assistant messages, removes
-empty messages, and discards user messages matching runtime metadata markers.
-Tool-role messages and image blocks are not included as image inputs.
+The plugin accepts mapping or LiteLLM object contexts with `structured_messages`
+or `raw_messages`. It keeps system/user/assistant text and excludes tool-role
+records. User requests containing `chat_id`, `message_id` or other metadata words
+are preserved. Images are not passed as image inputs to the classifier.
 
-The transcript includes the newest system/profile message plus the last eight
-non-system messages by default; each message is truncated to 3,000 characters.
-This is a per-message limit, not a total token budget. Metadata matching can also
-drop genuine user requests containing phrases such as `chat_id`.
+By default the newest system/profile message and last eight conversation messages
+are retained, with each message limited to 3,000 characters. This shortened
+transcript is routing context, not the full solver cost estimate. Invalid limits
+have controlled fallback behavior.
 
-The payload uses `state.records` and question `tier`, sent to
-`https://openrouter.ai/api/alpha/decisions`, with default model `typesafe/jev-1.13`.
-The response reads `answers.tier.choice`, accepts a wrapped value/choice/label,
-uppercases it, and returns it only if it belongs to the eight allowed tiers.
+Without `COST_ROUTER_CONFIG`, the legacy Decisions API asks for one of eight tiers:
+GENERAL, REASONING, AGENTIC or CODING, each EFFICIENT or CAPABLE. Implementation
+work takes CODING precedence over analysis. `JEV_FAIL_TIER` defaults to
+`GENERAL_CAPABLE`. This legacy mode does not provide the strict budget guarantee.
 
-## Classification policy
-
-- CODING covers requested implementation, software debugging, tests, or repository
-  edits; it takes precedence over REASONING when code work is requested.
-- AGENTIC covers primary orchestration, delegation, tools, and autonomous workflows.
-- REASONING covers analysis, planning, architecture, and review without primary implementation.
-- GENERAL covers writing, explanation, synthesis, and remaining general work.
-- EFFICIENT means bounded, low-ambiguity work. CAPABLE covers uncertainty, difficult
-  debugging, broad changes, branching workflows, and high rework risk.
-
-Hermes profile labels are routing evidence rather than fixed overrides. Mixed
-orchestration/implementation intent is not given an exhaustive precedence rule.
-
-## Failures and configuration
-
-Missing provider key, empty usable transcript, handled HTTP/network/timeout errors,
-invalid response shape, or invalid choice lead to `JEV_FAIL_TIER`, default
-`GENERAL_CAPABLE`. An unsupported fallback tier is reset to that default.
-Transcript construction occurs before the API-call exception handler, so this is
-not a guarantee that every malformed input or environment value fails safely.
-
-| Variable | Imported default |
+| Legacy variable | Default |
 |---|---|
 | `JEV_MODEL` | `typesafe/jev-1.13` |
-| `JEV_TIMEOUT_SECONDS` | `5.0` |
-| `JEV_MAX_MESSAGES` | `8` |
-| `JEV_MAX_CHARS_PER_MESSAGE` | `3000` |
+| `JEV_DECISIONS_URL` | `https://openrouter.ai/api/alpha/decisions` |
+| `JEV_TIMEOUT_SECONDS` | `5.0`, finite and positive |
+| `JEV_MAX_MESSAGES` | `8`, positive |
+| `JEV_MAX_CHARS_PER_MESSAGE` | `3000`, positive |
 | `JEV_FAIL_TIER` | `GENERAL_CAPABLE` |
-| `JEV_LOG_RAW_ANSWER` | `true` |
-| `JEV_LOG_TIMING` | `true` |
+| `JEV_LOG_RAW_ANSWER`, `JEV_LOG_TIMING` | `true` |
 
-Fallback tier selection is distinct from the proxy's paid fallback chains.
-Classification, HTTP-error, and timing logs may contain provider data; review
-captured output before retaining it as public evidence.
+`OPENROUTER_API_KEY` is required for the HTTP call. Missing keys, empty transcript,
+handled request failures or invalid answers take the fallback path. Logs may
+contain response data; sanitized evidence is required before retention.
 
-Related: [routing](routing.md), [evaluation differences](evaluation.md), [open questions](open-questions.md).
+## Strict local selection
+
+With `COST_ROUTER_CONFIG`, the complete policy is validated at construction.
+`routes.jev` candidates use the pinned LiteLLM tier names, mapped to configured
+solver deployments. The guard captures the original request in a private registry;
+Jev requires its generated request identity and matching policy revision. User
+metadata cannot replace authoritative capabilities, payload or spend context.
+
+For each candidate, Jev receives server-calculated estimate and conservative
+bound, canonical model, capabilities, and current model/overall/request remaining
+capacity. Estimates use the full original solver request and actual provider
+model, not merely the shortened transcript. Invalid, expired, unsupported,
+failed or unavailable deployments are excluded. Eligible free candidates exclude
+paid candidates from the choice set. Quota exhaustion or configured free failures
+can unlock compatible paid fallbacks.
+
+The classifier's own charge is reserved under the same logical request. Its
+contract binds the actual POST origin/path, provider model and output cap; strict
+mode does not take endpoint/model overrides from the legacy environment variables.
+The exact outgoing Decisions body includes `max_tokens` and is priced before
+HTTP dispatch. Redirects and environment proxy inheritance are disabled. Only a
+dated bounded loopback Decisions contract is currently supported; live alpha
+Decisions lacks a verified maximum-charge contract and is refused.
+
+On success, eligibility is recomputed after classifier settlement. Missing or
+malformed choices and handled failures select only a currently eligible fallback.
+Cancellation propagates while retaining unknown charge exposure. Failed billable
+responses remain accounted; absent final cost never becomes zero.
+
+The pinned LiteLLM complexity router can catch plugin errors and choose its own
+fallback. Consequently Jev is advisory: every actual solver dispatch must still
+pass the deterministic final gate for capabilities, allowed deployment, fresh
+contract and atomic budget reservation.
+
+## Verification boundary
+
+[Classifier controls](../tools/test_classifier_controls.py) and
+[original repairs](../tools/test_router_repairs.py) cover the public `classify`
+seam with fake HTTP. [Local proxy probe](../tools/local_proxy_probe.py) exercises
+the pinned real complexity-router path; [budget matrix](../tools/proxy_budget_matrix.py)
+exercises independent budget scopes and concurrent processes. Current run outcomes
+are retained in the [receipt](../raw/notes/2026-09-21-local-delivery-receipt.md) and [log](log.md).
+Historical checkpoint claims retain their original scope and are superseded by
+subsequent correction entries.
+
+Related: [routing](routing.md), [cost awareness](cost-awareness.md),
+[operations](operations.md), [delivery plan](router-delivery-plan.md).

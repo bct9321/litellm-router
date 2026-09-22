@@ -1,35 +1,64 @@
 # Operations and GitHub workflow
 
-Status: source-derived operating guide, 2026-09-20; deployment steps are pending validation.
-Sources: [config](../raw/config.yaml), [classifier](../raw/jev_classifier.py),
-[quota guard](../raw/openrouter_quota_guard.py), [discovery](../raw/discover-free-models.py),
-[health](../raw/test-models.py), [benchmark](../raw/benchmark-classifiers.py),
-[bootstrap note](../raw/notes/2026-09-20-workspace-bootstrap.md).
+Status: current local operating guide, 2026-09-21. Implementation has resumed;
+final local integration and two clean independent reviews passed. See the
+[receipt](../raw/notes/2026-09-21-local-delivery-receipt.md) for exact commands, exits and proof.
+Sources: [execution authorization](../raw/notes/2026-09-21-router-plan-execution.md),
+[delivery plan](router-delivery-plan.md), [requirements](../requirements.txt),
+[working config](../router/config.yaml), and [report CLI](../tools/cost_report.py).
+Imported 2026-09-20 sources remain provenance, not current runtime instructions.
 
-## Offline workspace checks
+## Runtime setup and local checks
 
-From the repository root, run `py -3 tools/check_workspace.py` on Windows or
-`python tools/check_workspace.py` elsewhere. Python 3.10+ is required by the
-imported source syntax. The check uses no third-party packages or provider keys.
-GitHub Actions runs it on pushes and pull requests.
+LiteLLM 1.99.0 and jsonschema 4.26.0 are pinned. Use Python 3.12 for the local
+runtime; the verified environment is `.venv312`. These are setup instructions,
+not a claim of a fresh clean-machine installation:
 
-## Deployment prerequisites
+```powershell
+py -3.12 -m venv .venv312
+.venv312\Scripts\python.exe -m pip install -r requirements.txt
+.venv312\Scripts\python.exe tools\prepare_tokenizer_cache.py
+```
 
-No working dependency lock, container definition, service manager, database setup,
-or known-compatible LiteLLM version was supplied. A one-command deployment recipe
-would therefore be speculative. Before the first deployment:
+The tokenizer helper's default mode checks public artifact checksums without
+network access. If those files are missing, its explicit `--download` option
+fetches the known public artifacts and verifies their hashes. No provider key is
+needed. A new download/clean-machine setup has not been verified in this execution.
 
-1. Identify and record the intended Python/LiteLLM versions and deployment host.
-2. Provide the dependencies referenced by imports: `httpx`; for the callback,
-   `fastapi` and `litellm`, plus the proxy's own installation requirements.
-3. Make `router/jev_classifier.py` and `router/openrouter_quota_guard.py` importable
-   under the module names used by `router/config.yaml`.
-4. Provide the configured environment and a compatible database; validate config,
-   custom classifier loading, callback loading, and database connectivity.
-5. Verify a direct alias, `jev`, fallbacks, quota rewrites, error responses, and
-   diagnostic headers. Include streaming if the intended client uses it.
-6. Record exact commands, versions, sanitized evidence, and rollback procedure
-   here once validated. Do not substitute a syntax check for these checks.
+```powershell
+$env:CUSTOM_TIKTOKEN_CACHE_DIR = Join-Path $PWD 'outputs/token-cache'
+.venv312\Scripts\python.exe tools\local_proxy_probe.py
+.venv312\Scripts\python.exe tools\proxy_budget_matrix.py
+.venv312\Scripts\python.exe -m unittest discover -s tools -p 'test_*.py'
+py -3 tools\check_workspace.py
+```
+
+The two harnesses start temporary real LiteLLM proxies and deterministic fake
+loopback services, then stop them. The matrix separately targets overall/model
+UTC day/month and request caps plus synchronized multi-process admission.
+Inspect the unique output directories and [log](log.md) for actual run results.
+These commands are not a persistent production service start recipe.
+
+`py -3 tools/check_workspace.py` is the standard-library-only structural check
+(Python 3.10+); it does not certify runtime routing or budgets. All dependency-backed
+runtime checks above use `.venv312\Scripts\python.exe`.
+
+## Activation and live boundary
+
+The supplied config loads the cost callback before quota rewriting. Without
+`COST_ROUTER_CONFIG`, strict controls are inactive. A local policy must conform to
+[cost-router.schema.json](../router/cost-router.schema.json): explicit finite
+integer USD-nanodollar limits; trusted deployment IDs and route membership; dated
+origin/path/model billing contracts; supported request surfaces and output caps.
+Workers share the same local SQLite ledger and full policy fingerprint. Changing
+policy against an existing ledger is deliberately refused rather than silently
+reinterpreting prior accounting.
+
+Strict mode currently supports bounded loopback text-chat and Decisions fixtures.
+Unsupported modalities, missing/stale bounds and live provider contracts are
+rejected. Real OpenRouter/alpha Decisions billing bounds and deployment remain
+unverified. No live limits are supplied here. A live service recipe requires those
+contracts and separately authorized operational verification.
 
 ## Environment reference
 
@@ -68,13 +97,13 @@ does not authorize running a live benchmark or changing deployed routing.
 ```powershell
 # Explicit free-only discovery, bounded to one selected catalog candidate.
 $env:DISCOVERY_OUTPUT_DIR = Join-Path $PWD 'outputs/discovery'
-py -3 tools/discover-free-models.py --no-paid --max-models 1
+.venv312\Scripts\python.exe tools/discover-free-models.py --no-paid --max-models 1
 
 # Exercise configured free AND paid proxy routes.
-py -3 tools/test-models.py
+.venv312\Scripts\python.exe tools/test-models.py
 
 # Requires classifier models to be available through the proxy first.
-py -3 tools/benchmark-classifiers.py
+.venv312\Scripts\python.exe tools/benchmark-classifiers.py
 ```
 
 Set credentials locally using your chosen secret mechanism. An ignored `.env` can
@@ -98,3 +127,38 @@ Publishing the repository does not deploy the proxy. No license has been selecte
 do not invent the owner's licensing terms.
 
 Related: [workflow](workflow.md), [decisions](decisions.md), [log](log.md).
+
+## Spend reports and historical files
+
+The report requires the same policy path, ledger scope and configured limits. It
+reads no credentials and makes no provider call:
+
+```powershell
+.venv312\Scripts\python.exe tools\cost_report.py --config <policy.json>
+.venv312\Scripts\python.exe tools\cost_report.py --config <policy.json> --openrouter-activity <sanitized-activity.json> --history-scope <scope> --history-disposition comparison-only
+```
+
+Reports expose canonical-model and overall UTC today/month spend, estimates,
+remaining limits, reset times, separate pending/unknown counts and exposure,
+identity-attributed attempts, imported history and coverage. Unknown coverage
+makes remaining capacity null; it is never reported as zero spend.
+
+`coverage_mode: router-only` covers this ledger's local traffic only. It does not
+claim complete provider/account spend. `coverage_mode: provider-period` requires
+explicit matching `billing_scope`, complete history coverage and nonoverlapping
+opening balances before admitting traffic. The CLI supports:
+
+- `--history-disposition opening-balance` only for proven nonoverlapping history;
+  overlapping rows are rejected instead of counted twice.
+- `--history-disposition unresolved` for history that cannot establish a balance.
+- `--history-revision <integer>` for explicit newer corrections; repeat equivalent
+  imports remain idempotent even when `--source` changes.
+- `--coverage-attestation <file.json>` with reviewed `scope`, `start` and `end`
+  timestamps. This is an assertion of external evidence, not evidence itself;
+  absent rows do not establish zero historical usage.
+
+`history_model_map` maps provider IDs to canonical model budgets. Default history
+imports are comparison-only and do not expand coverage. Available downloaded
+OpenRouter activity can be developed/tested locally without account access;
+missing old history or ambiguous overlap remains explicitly unresolved. See
+[cost awareness](cost-awareness.md) and the [ledger](../router/spend_ledger.py).
