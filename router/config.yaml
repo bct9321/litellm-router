@@ -1,3 +1,4 @@
+# Free-first callback routing; subscription model access remains live-unverified.
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY
   database_url: os.environ/DATABASE_URL
@@ -6,20 +7,20 @@ litellm_settings:
   check_provider_endpoint: true
   drop_params: true
   callbacks:
-  - openrouter_quota_guard.proxy_handler_instance
+  - router.jev_router.proxy_handler_instance
+  custom_provider_map:
+  - provider: jev_guard
+    custom_handler: router.jev_router.entrypoint_guard
 router_settings:
   num_retries: 0
   allowed_fails: 2
   cooldown_time: 15
   fallbacks:
-  - jev:
-    - paid-general-capable
-    - paid-general-capable-backup
-    - paid-emergency
   - free-general-efficient:
     - free-general-efficient-backup
     - free-general-capable
     - free-general-capable-backup
+    - advanced-general
     - paid-general-efficient
     - paid-general-efficient-backup
     - paid-general-capable
@@ -28,6 +29,7 @@ router_settings:
   - free-general-efficient-backup:
     - free-general-capable
     - free-general-capable-backup
+    - advanced-general
     - paid-general-efficient
     - paid-general-efficient-backup
     - paid-general-capable
@@ -35,10 +37,12 @@ router_settings:
     - paid-emergency
   - free-general-capable:
     - free-general-capable-backup
+    - advanced-general
     - paid-general-capable
     - paid-general-capable-backup
     - paid-emergency
   - free-general-capable-backup:
+    - advanced-general
     - paid-general-capable
     - paid-general-capable-backup
     - paid-emergency
@@ -60,6 +64,7 @@ router_settings:
     - free-reasoning-efficient-backup
     - free-reasoning-capable
     - free-reasoning-capable-backup
+    - advanced-reasoning
     - paid-reasoning-efficient
     - paid-reasoning-efficient-backup
     - paid-reasoning-capable
@@ -68,6 +73,7 @@ router_settings:
   - free-reasoning-efficient-backup:
     - free-reasoning-capable
     - free-reasoning-capable-backup
+    - advanced-reasoning
     - paid-reasoning-efficient
     - paid-reasoning-efficient-backup
     - paid-reasoning-capable
@@ -75,10 +81,12 @@ router_settings:
     - paid-emergency
   - free-reasoning-capable:
     - free-reasoning-capable-backup
+    - advanced-reasoning
     - paid-reasoning-capable
     - paid-reasoning-capable-backup
     - paid-emergency
   - free-reasoning-capable-backup:
+    - advanced-reasoning
     - paid-reasoning-capable
     - paid-reasoning-capable-backup
     - paid-emergency
@@ -100,6 +108,7 @@ router_settings:
     - free-agentic-efficient-backup
     - free-agentic-capable
     - free-agentic-capable-backup
+    - advanced-agentic
     - paid-agentic-efficient
     - paid-agentic-efficient-backup
     - paid-agentic-capable
@@ -108,6 +117,7 @@ router_settings:
   - free-agentic-efficient-backup:
     - free-agentic-capable
     - free-agentic-capable-backup
+    - advanced-agentic
     - paid-agentic-efficient
     - paid-agentic-efficient-backup
     - paid-agentic-capable
@@ -115,10 +125,12 @@ router_settings:
     - paid-emergency
   - free-agentic-capable:
     - free-agentic-capable-backup
+    - advanced-agentic
     - paid-agentic-capable
     - paid-agentic-capable-backup
     - paid-emergency
   - free-agentic-capable-backup:
+    - advanced-agentic
     - paid-agentic-capable
     - paid-agentic-capable-backup
     - paid-emergency
@@ -140,6 +152,7 @@ router_settings:
     - free-coding-efficient-backup
     - free-coding-capable
     - free-coding-capable-backup
+    - advanced-coding
     - paid-coding-efficient
     - paid-coding-efficient-backup
     - paid-coding-capable
@@ -148,6 +161,7 @@ router_settings:
   - free-coding-efficient-backup:
     - free-coding-capable
     - free-coding-capable-backup
+    - advanced-coding
     - paid-coding-efficient
     - paid-coding-efficient-backup
     - paid-coding-capable
@@ -155,10 +169,12 @@ router_settings:
     - paid-emergency
   - free-coding-capable:
     - free-coding-capable-backup
+    - advanced-coding
     - paid-coding-capable
     - paid-coding-capable-backup
     - paid-emergency
   - free-coding-capable-backup:
+    - advanced-coding
     - paid-coding-capable
     - paid-coding-capable-backup
     - paid-emergency
@@ -215,50 +231,58 @@ router_settings:
     - paid-compression-backup
   - free-emergency-capable:
     - paid-emergency
+  - advanced-general:
+    - paid-general-capable
+    - paid-general-capable-backup
+    - paid-emergency
+  - expert-general:
+    - paid-general-capable
+    - paid-general-capable-backup
+    - paid-emergency
+  - frontier-general:
+    - paid-general-capable
+    - paid-general-capable-backup
+    - paid-emergency
+  - advanced-reasoning:
+    - paid-reasoning-capable
+    - paid-reasoning-capable-backup
+    - paid-emergency
+  - expert-reasoning:
+    - paid-reasoning-capable
+    - paid-reasoning-capable-backup
+    - paid-emergency
+  - frontier-reasoning:
+    - paid-reasoning-capable
+    - paid-reasoning-capable-backup
+    - paid-emergency
+  - advanced-agentic:
+    - paid-agentic-capable
+    - paid-agentic-capable-backup
+    - paid-emergency
+  - expert-agentic:
+    - paid-agentic-capable
+    - paid-agentic-capable-backup
+    - paid-emergency
+  - frontier-agentic:
+    - paid-agentic-capable
+    - paid-agentic-capable-backup
+    - paid-emergency
+  - advanced-coding:
+    - paid-coding-capable
+    - paid-coding-capable-backup
+    - paid-emergency
+  - expert-coding:
+    - paid-coding-capable
+    - paid-coding-capable-backup
+    - paid-emergency
+  - frontier-coding:
+    - paid-coding-capable
+    - paid-coding-capable-backup
+    - paid-emergency
 model_list:
 - model_name: jev
   litellm_params:
-    model: auto_router/complexity_router
-    complexity_router_config:
-      classifier_type: custom
-      classifier_plugin: jev_classifier.jev_classifier
-      tier_definitions:
-      - name: GENERAL_EFFICIENT
-        description: Routine general-purpose work. Solver must normally answer the tiny health probe within 1.5s
-          and remain below a 4s hard probe ceiling. Requires strong instruction following, structured output competence,
-          >=128K context, and >=98% target availability.
-      - name: GENERAL_CAPABLE
-        description: Difficult general-purpose work where materially stronger quality justifies more latency. Target
-          <=3s, hard probe ceiling 8s, >=98% target availability, strong synthesis and ambiguity handling.
-      - name: REASONING_EFFICIENT
-        description: Straightforward planning, diagnosis and tradeoff reasoning. Target <=2s, hard probe ceiling
-          5s, >=98% target availability, with strong multi-step reasoning.
-      - name: REASONING_CAPABLE
-        description: Deep causal reasoning, architecture, uncertainty and difficult planning. Target <=4s, hard
-          probe ceiling 10s, >=97.5% target availability, and materially stronger reasoning quality.
-      - name: AGENTIC_EFFICIENT
-        description: Short reliable tool workflows and simple delegation. Target <=1.5s, hard probe ceiling 4s,
-          >=98% target availability. Must reliably follow tool/JSON schemas and handle a few dependent actions.
-      - name: AGENTIC_CAPABLE
-        description: Long-horizon or branching tool execution, recovery and orchestration. Target <=3s, hard probe
-          ceiling 8s, >=97.5% target availability, strong tool use and recovery behavior.
-      - name: CODING_EFFICIENT
-        description: Small fixes, tests and bounded refactors. Target <=1.5s, hard probe ceiling 4s, >=98% target
-          availability, strong code generation/editing and instruction following.
-      - name: CODING_CAPABLE
-        description: Hard debugging, cross-file implementation, architecture plus implementation, concurrency or
-          distributed systems. Target <=3s, hard probe ceiling 8s, >=97.5% target availability, materially stronger
-          software-engineering quality than the efficient tier.
-      tiers:
-        GENERAL_EFFICIENT: free-general-efficient
-        GENERAL_CAPABLE: free-general-capable
-        REASONING_EFFICIENT: free-reasoning-efficient
-        REASONING_CAPABLE: free-reasoning-capable
-        AGENTIC_EFFICIENT: free-agentic-efficient
-        AGENTIC_CAPABLE: free-agentic-capable
-        CODING_EFFICIENT: free-coding-efficient
-        CODING_CAPABLE: free-coding-capable
-      fallback_tier: GENERAL_CAPABLE
+    model: jev_guard/required
 - model_name: free-general-efficient
   litellm_params:
     model: openrouter/poolside/laguna-s-2.1:free
@@ -443,3 +467,63 @@ model_list:
   litellm_params:
     model: openrouter/openrouter/auto
     api_key: os.environ/OPENROUTER_API_KEY
+- model_name: advanced-general
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-luna
+- model_name: expert-general
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-terra
+- model_name: frontier-general
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-sol
+- model_name: advanced-reasoning
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-luna
+- model_name: expert-reasoning
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-terra
+- model_name: frontier-reasoning
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-sol
+- model_name: advanced-agentic
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-luna
+- model_name: expert-agentic
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-terra
+- model_name: frontier-agentic
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-sol
+- model_name: advanced-coding
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-luna
+- model_name: expert-coding
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-terra
+- model_name: frontier-coding
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-sol

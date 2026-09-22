@@ -70,3 +70,42 @@ Consequence: successful discovery does not prove deployed alias health, and a
 classifier benchmark does not certify the runtime plugin's transcript handling.
 
 Related: [architecture](architecture.md), [evaluation](evaluation.md), [open questions](open-questions.md).
+
+## R004 — Twenty semantic classes, no failure escalation
+
+Superseded for failure policy by R006 below; retained as history.
+
+Accepted 2026-09-22, implementation proposed. [Source](../raw/notes/2026-09-22-twenty-tier-scope.md). Supersedes the two-strength taxonomy in R001. Preserve semantic tier -> family alias -> deployment separation and existing lower-tier routing. Keep strict cost controls on their separate branch. Use YAML for ChatGPT deployments; availability and authentication require operational evidence.
+
+## R005 — Five capability tiers with family narrowing
+
+Built-in Auto Router integration superseded as a proposal by the callback design in R006; semantic dimensions retained.
+
+Accepted, implementation pending. [Revised contract](../raw/notes/2026-09-22-five-tier-routing-request.md) supersedes R004's twenty Auto Router tiers. Keep twenty JEV semantic classes; one structured decision supplies family and capability. A supported classifier-to-RoutingPlugin signal is a prerequisite. Do not patch the tier cap.
+
+## R006 — Free-first callback routing with subscription escalation
+
+Status: user-directed free-first/escalation preference; callback implementation
+proposed and documented, 2026-09-22. [Source](../raw/notes/2026-09-22-free-first-escalation-design.md),
+[current architecture](semantic-routing-alternative.md).
+
+Keep all eight existing EFFICIENT/CAPABLE primary solver routes free. Permit
+subscription escalation after compatible free failures or known exhausted free
+capacity, and direct subscription selection for exceptional task complexity.
+Keep family/capability semantic judgment separate from availability/provider/cost
+policy. Proposed higher-level assignments remain Luna/Terra/Sol; model quality
+and availability are unverified. Paid API fallback is last, with exact limits and
+chains still unresolved. Specialist routes require their own compatibility checks.
+
+This supersedes R004's no-failure-escalation rule and R005's built-in Auto Router
+integration proposal. It discards the intervening suggestion to use ChatGPT as
+CAPABLE primary. Exact fallback behavior is intentionally changing; future work
+must record baseline-versus-target traces. No runtime change or live deployment
+is established by this documentation decision.
+
+## R007 — Execute the callback design
+
+[User authorization and bounded choices](../raw/notes/2026-09-22-callback-implementation-authorization.md). Implement one semantic choice parsed into family/capability, free-primary/free-backup then Luna then paid continuity; direct higher tiers retain selected subscription strength. Remove virtual-entrypoint fallback; fail closed if callback absent. Exact supported surfaces and guardrail/access limits are verified before publishing.
+
+R007 implementation status: verified offline by 21 tests and two clean independent
+reviews; [durable receipt](../raw/notes/2026-09-22-callback-acceptance.md). Live boundaries remain unresolved as documented. Publication is authorized; deployment is not part of this task.

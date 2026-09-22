@@ -1,5 +1,7 @@
 # Jev classification
 
+Current proposed contract (2026-09-22): the [free-first callback design](semantic-routing-alternative.md) uses one family-plus-capability decision and twenty semantic classes. Provider/auth/cost state does not determine semantics. Lower-tier wording has been restored in the draft; structured callback integration and classification quality remain unverified. Historical interface investigations follow.
+
 Status: observed source behavior, 2026-09-20.
 Source: [jev_classifier.py](../raw/jev_classifier.py), especially
 `_classification_transcript`, `OpenRouterJevClassifier.classify`, and `FAIL_TIER`.
@@ -57,3 +59,19 @@ Classification, HTTP-error, and timing logs may contain provider data; review
 captured output before retaining it as public evidence.
 
 Related: [routing](routing.md), [evaluation differences](evaluation.md), [open questions](open-questions.md).
+
+## Proposed twenty-class expansion — 2026-09-22
+
+[Accepted scope](../raw/notes/2026-09-22-twenty-tier-scope.md): retain one tier decision, expand its choices and criteria to twenty semantic classes. Describe ADVANCED as hard bounded work, EXPERT as deep systemic work, FRONTIER as exceptional novel/ambiguous work. Preserve family precedence and existing lower-tier failure defaults; failure overrides cannot promote into the three new levels.
+
+## Audit correction
+
+[Both independent reviews](../raw/notes/2026-09-22-expanded-tiers-blocked-audit.md) found the draft changed CAPABLE instructions, contrary to the accepted preservation requirement. Twenty fake choices being accepted is only output-schema evidence. Existing-semantics and failure-path verification remain incomplete; no finished routing claim is made.
+
+## Revised structured decision prerequisite
+
+[Revised contract](../raw/notes/2026-09-22-five-tier-routing-request.md): one family-plus-capability decision; return capability to LiteLLM and publish family using a supported request-scoped field. Investigate real hook propagation; do not rely on shared mutable state or alter the tier cap. Restore baseline CAPABLE wording.
+
+## Five-tier handoff audit and wording repair
+
+[Evidence](../raw/notes/2026-09-22-five-tier-api-audit.md): the required supported handoff is absent. Real-hook probes demonstrate lost classifier metadata/signals and rejected structured returns. Original eight criteria and CAPABLE instruction have been restored and compared through fake Decisions HTTP; live classification equivalence is not established. No five-tier implementation is claimed.

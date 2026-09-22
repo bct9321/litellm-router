@@ -1,23 +1,26 @@
 """
 jev_classifier.py
 
-Single custom LiteLLM Auto Router classifier for:
+Single semantic classifier used by the proxy routing callback:
 
-    Hermes -> LiteLLM -> Jev -> Free OpenRouter Solvers
+    Hermes -> LiteLLM -> Jev -> semantic alias -> configured solver
 
 The classifier chooses:
 
-    1. Capability
+    1. Family
        - GENERAL
        - REASONING
        - AGENTIC
        - CODING
 
-    2. Strength
+    2. Capability
        - EFFICIENT
        - CAPABLE
+       - ADVANCED
+       - EXPERT
+       - FRONTIER
 
-This gives LiteLLM exactly 8 tiers.
+This produces twenty semantic classes, not twenty LiteLLM Auto Router tiers.
 
 Static/specialized Hermes tasks should bypass this router where appropriate:
 
@@ -26,7 +29,7 @@ Static/specialized Hermes tasks should bypass this router where appropriate:
     compression -> long-context free model
 
 Jev only CLASSIFIES the request.
-The actual solver models remain free OpenRouter models.
+Lower tiers use free-first OpenRouter routes; higher tiers use semantic ChatGPT aliases.
 """
 
 from __future__ import annotations
@@ -43,16 +46,48 @@ import httpx
 # TIERS
 # ============================================================================
 
-TIERS = (
-    "GENERAL_EFFICIENT",
-    "GENERAL_CAPABLE",
-    "REASONING_EFFICIENT",
-    "REASONING_CAPABLE",
-    "AGENTIC_EFFICIENT",
-    "AGENTIC_CAPABLE",
-    "CODING_EFFICIENT",
-    "CODING_CAPABLE",
-)
+FAMILIES = ("GENERAL", "REASONING", "AGENTIC", "CODING")
+CAPABILITIES = ("EFFICIENT", "CAPABLE", "ADVANCED", "EXPERT", "FRONTIER")
+TIERS = tuple(f"{family}_{level}" for family in FAMILIES for level in CAPABILITIES)
+
+HIGHER_TIER_CRITERIA = {
+    "GENERAL_ADVANCED": (
+        "Hard but bounded writing, research synthesis or explanation with many interacting sources, constraints or audiences; stronger quality materially reduces errors or rework."
+    ),
+    "GENERAL_EXPERT": (
+        "Deep synthesis or communication requiring sophisticated domain modeling, subtle distinctions, conflicting evidence and substantial ambiguity."
+    ),
+    "GENERAL_FRONTIER": (
+        "Exceptional general-purpose work with unusual novelty, hidden interacting constraints or ambiguity where expert-level approaches are materially likely to fail."
+    ),
+    "REASONING_ADVANCED": (
+        "Hard but bounded analysis, planning or diagnosis with interacting constraints and substantial multi-step causal reasoning; implementation is not the requested output."
+    ),
+    "REASONING_EXPERT": (
+        "Deep analysis requiring sophisticated system models, subtle causal inference, non-local effects or major architectural tradeoffs; implementation is not the requested output."
+    ),
+    "REASONING_FRONTIER": (
+        "Exceptional analytical problems with unusual novelty, hidden interacting constraints or uncertainty where expert-level approaches are materially likely to fail."
+    ),
+    "AGENTIC_ADVANCED": (
+        "Hard but bounded tool orchestration with many dependent actions, interacting constraints and difficult recovery decisions."
+    ),
+    "AGENTIC_EXPERT": (
+        "Deep autonomous workflow design or execution involving distributed state, concurrent agents, lifecycle dependencies and sophisticated recovery planning."
+    ),
+    "AGENTIC_FRONTIER": (
+        "Exceptional autonomous workflows with novel tools, hidden interacting constraints or severe ambiguity where expert-level orchestration is materially likely to fail."
+    ),
+    "CODING_ADVANCED": (
+        "Hard but bounded software-engineering work involving substantial cross-file reasoning, interacting constraints, difficult debugging or complex implementation; stronger quality materially reduces errors or rework."
+    ),
+    "CODING_EXPERT": (
+        "Deep software-engineering work requiring sophisticated system modeling, subtle causal reasoning, non-local correctness analysis, distributed state, concurrency, lifecycle behavior or major architectural change."
+    ),
+    "CODING_FRONTIER": (
+        "Exceptional software-engineering problems with unusual ambiguity, novelty, hidden interacting constraints or subtle correctness requirements where expert-level approaches are materially likely to fail."
+    ),
+}
 
 
 # ============================================================================
@@ -64,7 +99,7 @@ FAIL_TIER = os.getenv(
     "GENERAL_CAPABLE",
 )
 
-if FAIL_TIER not in TIERS:
+if FAIL_TIER not in TIERS or FAIL_TIER.rsplit("_", 1)[-1] not in {"EFFICIENT", "CAPABLE"}:
     FAIL_TIER = "GENERAL_CAPABLE"
 
 
@@ -486,7 +521,7 @@ class OpenRouterJevClassifier:
             "state": {
 
                 "description": (
-                    "Route a Hermes AI-agent request to exactly one FREE solver tier. "
+                    "Route a Hermes AI-agent request to exactly one semantic solver tier. "
 
                     "First determine CAPABILITY. "
 
@@ -507,7 +542,7 @@ class OpenRouterJevClassifier:
                     "explanation, and miscellaneous tasks that do not clearly belong to CODING, "
                     "AGENTIC, or REASONING. "
 
-                    "Then determine STRENGTH: EFFICIENT or CAPABLE. "
+                    "Then determine STRENGTH: EFFICIENT, CAPABLE, ADVANCED, EXPERT or FRONTIER. "
 
                     "Use the Hermes system/profile prompt as strong routing evidence. "
 
@@ -566,10 +601,17 @@ class OpenRouterJevClassifier:
                         "unfamiliar systems, repeated failures, architecture plus implementation, "
                         "long branching workflows, high uncertainty, or high rework risk. "
 
+                        "Choose ADVANCED for hard but bounded work with substantial interacting constraints. "
+                        "Choose EXPERT for deep systemic work, sophisticated modeling and subtle non-local effects. "
+                        "Choose FRONTIER only for exceptional novelty or ambiguity where expert approaches "
+                        "are materially likely to fail. Choose the lowest sufficient strength. "
+                        "Model brands, provider failures and quota status do not define task strength. "
+
                         "Use the full transcript, especially the Hermes system/profile prompt."
                     ),
 
                     "criteria": {
+                        **HIGHER_TIER_CRITERIA,
 
                         "GENERAL_EFFICIENT": (
                             "Routine conversation, writing, summarization, explanation, "
@@ -878,6 +920,6 @@ class OpenRouterJevClassifier:
 
 # config.yaml:
 #
-#   classifier_plugin: jev_classifier.jev_classifier
+#   Used by router.jev_router; not configured as an Auto Router classifier plugin.
 #
 jev_classifier = OpenRouterJevClassifier()

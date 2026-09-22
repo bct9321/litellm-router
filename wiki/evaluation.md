@@ -1,5 +1,7 @@
 # Evaluation and model promotion
 
+Current target (2026-09-22): the [free-first callback design](semantic-routing-alternative.md) specifies twenty-outcome and real-proxy fallback/quota tests. Existing characterization tests prove limitations of prior approaches; they are not acceptance evidence for the callback architecture.
+
 Status: observed tool behavior, 2026-09-20; no live results supplied or run.
 Sources: [discovery](../raw/discover-free-models.py),
 [route health](../raw/test-models.py), [classifier benchmark](../raw/benchmark-classifiers.py).

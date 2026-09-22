@@ -1,0 +1,523 @@
+You’d change **four things in LiteLLM**, plus one small piece of your custom JEV classifier. You do **not** need to redesign the existing router.
+
+Your current `jev` definition already gives us the hook: custom classifier → `tier_definitions` → `tiers` mapping. :chatgpt-content-reference{index="0"}
+
+## 1. Expand the JEV tier definitions
+
+Today LiteLLM knows these eight:
+
+```yaml
+GENERAL_EFFICIENT
+GENERAL_CAPABLE
+REASONING_EFFICIENT
+REASONING_CAPABLE
+AGENTIC_EFFICIENT
+AGENTIC_CAPABLE
+CODING_EFFICIENT
+CODING_CAPABLE
+```
+
+Add the three higher capability levels to every family:
+
+```yaml
+GENERAL_ADVANCED
+GENERAL_EXPERT
+GENERAL_FRONTIER
+
+REASONING_ADVANCED
+REASONING_EXPERT
+REASONING_FRONTIER
+
+AGENTIC_ADVANCED
+AGENTIC_EXPERT
+AGENTIC_FRONTIER
+
+CODING_ADVANCED
+CODING_EXPERT
+CODING_FRONTIER
+```
+
+So your `complexity_router_config` goes from 8 → **20 semantic classes**.
+
+LiteLLM's current auto-router supports custom tier names and maps those tiers to model aliases exactly this way. :chatgpt-content-reference{index="1"}
+
+Conceptually:
+
+```yaml
+complexity_router_config:
+  classifier_type: custom
+  classifier_plugin: jev_classifier.jev_classifier
+
+  tier_definitions:
+    # existing
+    - name: CODING_EFFICIENT
+      description: ...
+    - name: CODING_CAPABLE
+      description: ...
+
+    # new
+    - name: CODING_ADVANCED
+      description: >
+        Hard but bounded software-engineering work involving substantial
+        cross-file reasoning, interacting constraints, difficult debugging,
+        or complex implementation. Stronger model quality is likely to
+        materially reduce errors or rework.
+
+    - name: CODING_EXPERT
+      description: >
+        Deep software-engineering work requiring sophisticated system modeling,
+        subtle causal reasoning, non-local correctness analysis, distributed
+        state, concurrency, lifecycle behavior, or major architectural change.
+
+    - name: CODING_FRONTIER
+      description: >
+        Exceptional software-engineering problems with unusual ambiguity,
+        novelty, hidden interacting constraints, subtle correctness requirements,
+        or problems where expert-level approaches are materially likely to fail.
+```
+
+Repeat the same capability distinction for General, Reasoning, and Agentic.
+
+---
+
+# 2. Extend your `tiers:` mapping
+
+Today:
+
+```yaml
+tiers:
+  GENERAL_EFFICIENT: free-general-efficient
+  GENERAL_CAPABLE: free-general-capable
+  ...
+  CODING_EFFICIENT: free-coding-efficient
+  CODING_CAPABLE: free-coding-capable
+```
+
+:chatgpt-content-reference{index="2"}
+
+I would extend it like this:
+
+```yaml
+tiers:
+  GENERAL_EFFICIENT: free-general-efficient
+  GENERAL_CAPABLE: free-general-capable
+  GENERAL_ADVANCED: advanced-general
+  GENERAL_EXPERT: expert-general
+  GENERAL_FRONTIER: frontier-general
+
+  REASONING_EFFICIENT: free-reasoning-efficient
+  REASONING_CAPABLE: free-reasoning-capable
+  REASONING_ADVANCED: advanced-reasoning
+  REASONING_EXPERT: expert-reasoning
+  REASONING_FRONTIER: frontier-reasoning
+
+  AGENTIC_EFFICIENT: free-agentic-efficient
+  AGENTIC_CAPABLE: free-agentic-capable
+  AGENTIC_ADVANCED: advanced-agentic
+  AGENTIC_EXPERT: expert-agentic
+  AGENTIC_FRONTIER: frontier-agentic
+
+  CODING_EFFICIENT: free-coding-efficient
+  CODING_CAPABLE: free-coding-capable
+  CODING_ADVANCED: advanced-coding
+  CODING_EXPERT: expert-coding
+  CODING_FRONTIER: frontier-coding
+```
+
+### Why separate aliases instead of this?
+
+I would **not** do:
+
+```yaml
+CODING_ADVANCED: chatgpt-luna
+GENERAL_ADVANCED: chatgpt-luna
+REASONING_ADVANCED: chatgpt-luna
+```
+
+Even if Luna initially powers all three.
+
+Instead:
+
+```text
+CODING_ADVANCED → advanced-coding → Luna
+GENERAL_ADVANCED → advanced-general → Luna
+```
+
+Because later you might discover:
+
+```text
+GENERAL_ADVANCED   → Luna
+CODING_ADVANCED    → some future coding-specific model
+AGENTIC_ADVANCED   → another model
+```
+
+and JEV's taxonomy stays untouched.
+
+---
+
+# 3. Add the actual deployments
+
+Initially I would populate the new semantic aliases approximately like this:
+
+```yaml
+# ------------------------
+# ADVANCED
+# ------------------------
+
+- model_name: advanced-general
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-luna
+
+- model_name: advanced-reasoning
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-luna
+
+- model_name: advanced-agentic
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-luna
+
+- model_name: advanced-coding
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-luna
+
+
+# ------------------------
+# EXPERT
+# ------------------------
+
+- model_name: expert-general
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-terra
+
+- model_name: expert-reasoning
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-terra
+
+- model_name: expert-agentic
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-terra
+
+- model_name: expert-coding
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-terra
+
+
+# ------------------------
+# FRONTIER
+# ------------------------
+
+- model_name: frontier-general
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-sol
+
+- model_name: frontier-reasoning
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-sol
+
+- model_name: frontier-agentic
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-sol
+
+- model_name: frontier-coding
+  model_info:
+    mode: responses
+  litellm_params:
+    model: chatgpt/gpt-5.6-sol
+```
+
+That model assignment is **initial policy**, not classifier semantics.
+
+The nice part is:
+
+```text
+CODING_EXPERT
+```
+
+doesn't mean Terra.
+
+It means:
+
+> expert-level coding problem.
+
+Today:
+
+```text
+expert-coding → Terra
+```
+
+Later:
+
+```text
+expert-coding → Qwen-whatever-2030
+```
+
+No classifier changes.
+
+---
+
+# 4. Do NOT extend your normal fallback chains upward
+
+This is a big one.
+
+Currently you've got chains like:
+
+```yaml
+free-coding-capable:
+  - free-coding-capable-backup
+  - paid-coding-capable
+  - paid-coding-capable-backup
+  - paid-emergency
+```
+
+:chatgpt-content-reference{index="3"}
+
+Do **not** change that to:
+
+```yaml
+free-coding-capable:
+  ...
+  - advanced-coding
+  - expert-coding
+  - frontier-coding
+```
+
+That would defeat everything we're designing.
+
+A network failure or 429 must not turn:
+
+```text
+CODING_CAPABLE
+```
+
+into:
+
+```text
+CODING_FRONTIER
+```
+
+Only **JEV classification** should get you there.
+
+I'd actually eventually rethink `paid-emergency → openrouter/auto` too, because your current emergency route hands model choice back to OpenRouter. :chatgpt-content-reference{index="4"} But that's separate work.
+
+---
+
+# 5. Your custom JEV classifier needs to recognize the new classes
+
+This is the only non-YAML piece.
+
+You have:
+
+```yaml
+classifier_type: custom
+classifier_plugin: jev_classifier.jev_classifier
+```
+
+:chatgpt-content-reference{index="5"}
+
+Whatever enumeration / decision schema that plugin currently gives Jev needs to go from something like:
+
+```python
+tiers = [
+    "GENERAL_EFFICIENT",
+    "GENERAL_CAPABLE",
+    "REASONING_EFFICIENT",
+    "REASONING_CAPABLE",
+    "AGENTIC_EFFICIENT",
+    "AGENTIC_CAPABLE",
+    "CODING_EFFICIENT",
+    "CODING_CAPABLE",
+]
+```
+
+to the twenty-class set.
+
+I would probably generate them rather than maintain 20 strings manually:
+
+```python
+FAMILIES = (
+    "GENERAL",
+    "REASONING",
+    "AGENTIC",
+    "CODING",
+)
+
+CAPABILITIES = (
+    "EFFICIENT",
+    "CAPABLE",
+    "ADVANCED",
+    "EXPERT",
+    "FRONTIER",
+)
+
+TIERS = [
+    f"{family}_{capability}"
+    for family in FAMILIES
+    for capability in CAPABILITIES
+]
+```
+
+Better yet, if your Jev integration supports multiple structured decisions cleanly:
+
+```python
+family = jev_decision(
+    ["GENERAL", "REASONING", "AGENTIC", "CODING"]
+)
+
+capability = jev_decision(
+    ["EFFICIENT", "CAPABLE", "ADVANCED", "EXPERT", "FRONTIER"]
+)
+
+tier = f"{family}_{capability}"
+```
+
+I prefer that architecture, but I'd inspect your existing classifier before changing its decision mechanics. No reason to destabilize something that's already working.
+
+---
+
+# 6. Add ChatGPT OAuth persistence to your LiteLLM container
+
+This part is independent of JEV.
+
+Something like:
+
+```text
+Host:
+/mnt/user/appdata/litellm/chatgpt-auth
+
+Container:
+/app/chatgpt-auth
+```
+
+and:
+
+```text
+CHATGPT_TOKEN_DIR=/app/chatgpt-auth
+```
+
+Then authenticate the `chatgpt/` provider.
+
+### Important for your config
+
+You currently have:
+
+```yaml
+general_settings:
+  store_model_in_db: true
+```
+
+:chatgpt-content-reference{index="6"}
+
+There is a current LiteLLM issue where `chatgpt` deployments created/stored through the DB/admin path can lose the provider's Responses configuration on streaming requests, while the **same models defined in YAML work correctly**. :chatgpt-content-reference{index="7"}
+
+So for now I would:
+
+**define these new ChatGPT deployments in YAML**, exactly like the rest of this config.
+
+Don't add them through the LiteLLM model UI until that behavior is confirmed fixed in the version you're running.
+
+---
+
+# 7. Audit your OpenRouter quota callback
+
+You have this globally:
+
+```yaml
+litellm_settings:
+  callbacks:
+    - openrouter_quota_guard.proxy_handler_instance
+```
+
+:chatgpt-content-reference{index="8"}
+
+Since we're adding a non-OpenRouter provider, confirm that callback exits immediately for:
+
+```text
+provider == chatgpt
+```
+
+It should never apply OpenRouter quota decisions to:
+
+```text
+advanced-coding
+expert-reasoning
+frontier-agentic
+...
+```
+
+This isn't necessarily a change—it may already be correctly scoped.
+
+Just test it.
+
+---
+
+# Final LiteLLM shape
+
+After the change:
+
+```text
+                          JEV
+                           │
+             ┌─────────────┴──────────────┐
+             │                            │
+          FAMILY                     CAPABILITY
+             │                            │
+      CODING / AGENTIC /        EFFICIENT / CAPABLE /
+      REASONING / GENERAL       ADVANCED / EXPERT /
+                                    FRONTIER
+             │                            │
+             └────────────┬───────────────┘
+                          │
+                   CODING_EXPERT
+                          │
+                          ▼
+                    expert-coding
+                          │
+                          ▼
+                      Terra today
+```
+
+The most important architectural invariant becomes:
+
+```text
+JEV classifier
+      ↓
+semantic tier
+      ↓
+LiteLLM alias
+      ↓
+actual deployment
+```
+
+**Not:**
+
+```text
+JEV
+ ↓
+specific vendor/model
+```
+
+For your existing config, the actual implementation delta is therefore pretty small: **12 new tier definitions, 12 new tier mappings, 12 semantic model aliases, OAuth storage/auth, and expanding the custom classifier's allowed outputs.** Everything under `EFFICIENT` and `CAPABLE` can remain exactly where it is today. :chatgpt-content-reference{index="9"}
+
+One caution: LiteLLM's auto-router UI has had very recent persistence bugs where GUI tier edits did not update the effective `complexity_router_config`, so I would keep this change source-controlled in YAML rather than make these particular edits through the GUI. :chatgpt-content-reference{index="10"}

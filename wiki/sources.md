@@ -24,3 +24,25 @@ accessed 2026-09-20; its short paraphrase and provenance are retained in the boo
 note. It informs workspace organization, not LiteLLM runtime claims.
 
 Related: [index](index.md), [workflow](workflow.md), [log](log.md).
+
+## Twenty-tier request (2026-09-22)
+
+[Original pasted request](../raw/notes/2026-09-22-twenty-tier-request.txt) and [scope, branch correction and evidence](../raw/notes/2026-09-22-twenty-tier-scope.md). User-authorized taxonomy and YAML policy expansion; runtime availability unresolved. Affects routing, classifier, quota guard, operations, evaluation and decisions.
+
+[Tier-limit verification and branch rename](../raw/notes/2026-09-22-tier-limit-evidence.md): local validation and upstream source contradict the unrestricted-tier assumption. Affects routing, operations, open questions and log.
+
+[Failed-state audit](../raw/notes/2026-09-22-expanded-tiers-blocked-audit.md): active goal stop condition, exact validation results, independent reviews, preserved YAML regression and remaining behavior/coverage defects. This is not completion evidence.
+
+[Revised five-tier routing contract](../raw/notes/2026-09-22-five-tier-routing-request.md): user replaces twenty LiteLLM tiers with twenty semantic classes/five capability tiers plus supported request-scoped family narrowing. API investigation must precede YAML changes.
+
+[Installed five-tier API audit](../raw/notes/2026-09-22-five-tier-api-audit.md): real public-hook probes and two independent reviews confirm missing signal propagation AND rejection of custom tiers with plugins. Source/test hashes retained; incomplete implementation, not acceptance.
+
+[Continue/publish authorization and current source check](../raw/notes/2026-09-22-publish-after-verification.md): user authorizes pushing expanded-tiers after verification. Upstream compatibility research and concrete callback alternative are recorded; no architecture change accepted yet.
+
+[Pinned upstream release research](../raw/notes/2026-09-22-upstream-five-tier-research.md): direct GitHub API/source confirms latest v1.102.0 and pinned main retain both compatibility blockers, with upstream tests explicitly expecting rejection. Supported pre-call callback alternative requires an integration choice.
+
+[Free-first subscription escalation design](../raw/notes/2026-09-22-free-first-escalation-design.md): latest user preference and documentation request. Supersedes no-failure-escalation and ChatGPT-as-CAPABLE-primary proposals. Records the proposed callback architecture, roster policy, unresolved choices and documentation-only scope.
+
+[Implementation/publication authorization](../raw/notes/2026-09-22-callback-implementation-authorization.md): implements documented callback design with explicit default fallback policy and verification gates.
+
+- [Callback acceptance receipt](../raw/notes/2026-09-22-callback-acceptance.md): observed offline tests, RED/GREEN review fixes, two independent clean verdicts and reviewed file fingerprints; informs current design, index, operations, decisions and log.

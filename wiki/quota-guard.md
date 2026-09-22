@@ -1,5 +1,7 @@
 # OpenRouter quota guard
 
+Current proposed quota behavior (2026-09-22): see the [free-first callback design](semantic-routing-alternative.md). Quota exhaustion should skip unavailable free solver attempts in favor of the subscription fallback policy. The baseline top-level jev-to-paid rewrite below conflicts with that target and needs deliberate reordering; no guard behavior changed in this documentation turn.
+
 Status: observed source behavior, 2026-09-20; API and hook integration unverified.
 Source: [openrouter_quota_guard.py](../raw/openrouter_quota_guard.py),
 `DEFAULT_ROUTE_MAP`, `_get_snapshot`, `async_pre_call_hook`, and header hook.
@@ -53,3 +55,7 @@ and `x-openrouter-quota-cache-age`. When no snapshot exists it returns only stat
 `unknown`. Header delivery through an actual proxy/stream remains to be verified.
 
 Related: [architecture](architecture.md), [operations](operations.md), [open questions](open-questions.md).
+
+## ChatGPT isolation — 2026-09-22
+
+[Request and evidence](../raw/notes/2026-09-22-tier-limit-evidence.md). Both public hooks now bypass OpenRouter lookup for the twelve new ChatGPT aliases, direct chatgpt/ names, or explicit ChatGPT provider metadata. Response provider metadata also suppresses OpenRouter headers after Jev routing. Verified with fake/no-network hook checks; actual proxy header delivery remains unverified.

@@ -1,5 +1,7 @@
 # Routing policy and contracts
 
+Current proposed policy (2026-09-22): the [free-first callback design](semantic-routing-alternative.md) supersedes earlier no-failure-escalation and built-in-tier proposals below. All eight primary routes remain free; compatible free backups precede ChatGPT, and paid API fallback is last. Existing chain details below describe the baseline, not the new target.
+
 Status: observed configuration, 2026-09-20; upstream availability unverified.
 Sources: [config.yaml](../raw/config.yaml) (`model_list`, `router_settings`),
 [health checker](../raw/test-models.py) (`CONTRACTS`, `ALIASES`),
@@ -57,3 +59,19 @@ Change and verify both together. Current model slugs are imported choices, not
 live recommendations or verified prices.
 
 Related: [classifier](classifier.md), [quota guard](quota-guard.md), [evaluation](evaluation.md).
+
+## Proposed expansion — 2026-09-22
+
+[Accepted scope](../raw/notes/2026-09-22-twenty-tier-scope.md): four families times five strengths. ADVANCED maps to advanced-<family> and ChatGPT Luna; EXPERT to expert-<family> and Terra; FRONTIER to frontier-<family> and Sol. Existing eight mappings, deployments and fallback chains stay unchanged. Only classification or an explicit alias request selects the new routes; transport failure cannot escalate into them. Model IDs are initial policy, availability unverified. This branch starts at main and excludes strict cost controls.
+
+## Current draft is not loadable
+
+The [failed-state audit](../raw/notes/2026-09-22-expanded-tiers-blocked-audit.md) supersedes any implied readiness: twenty-tier YAML fails the installed eight-tier validator. Existing 46 solver deployments, eight mappings/definitions and fallback settings compare equal to raw. This does not prove classifier semantics unchanged.
+
+## Revised target: five LiteLLM tiers
+
+[Accepted contract](../raw/notes/2026-09-22-five-tier-routing-request.md): retain twenty JEV classes but expose only five capability tiers; family narrowing must select exactly one of each tier's four aliases. No YAML change until installed API handoff support is verified. Existing draft is not this implementation.
+
+## Five-tier compatibility outcome
+
+[Installed API audit](../raw/notes/2026-09-22-five-tier-api-audit.md) confirms that five tiers alone are allowed, but custom definitions plus routing plugins are explicitly rejected. Family handoff is separately absent. Existing YAML remains the previous incomplete draft; it was not rewritten or deployed. A supported version/interface is needed before candidate-narrowing acceptance can proceed.

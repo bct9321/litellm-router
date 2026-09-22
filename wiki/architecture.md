@@ -1,5 +1,7 @@
 # Router architecture
 
+Current proposed architecture (2026-09-22): see the [free-first callback design](semantic-routing-alternative.md). One JEV decision selects a family/capability alias through a proxy callback; free solvers are preferred, with subscription escalation on failure or exceptional complexity. The imported request path below is historical, not the proposed implementation.
+
 Status: observed source design, 2026-09-20; deployment unverified.
 Sources: [config](../raw/config.yaml), [classifier](../raw/jev_classifier.py),
 [quota guard](../raw/openrouter_quota_guard.py).

@@ -42,6 +42,61 @@
       "sha256": "6d11217518547628669c6669a29f8d568a8935e99be1a58d7d9df49569db6e18",
       "ingested": "2026-09-20",
       "working_copy": "tools/test-models.py"
+    },
+    {
+      "path": "raw/notes/2026-09-22-twenty-tier-request.txt",
+      "sha256": "c247c0dc1e36f149bcdb376d2fce5cdba55021ca889da69b8abbbbf8d8f7d960",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-twenty-tier-scope.md",
+      "sha256": "3df5b6e0675a2baa4ca0ebda0e0a03f85093aa753a963ac5456bac3f2fcdc2a3",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-tier-limit-evidence.md",
+      "sha256": "37c149d7e6d86ed7959825080a7c1a0779ef9305fcb2c709172410141a43c1f3",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-expanded-tiers-blocked-audit.md",
+      "sha256": "ef24ea6a4308ea033a7217dd7cbe3b548f92013e26374680cb918551c9a00ac4",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-five-tier-routing-request.md",
+      "sha256": "c0ca3431a6a94862f8a2047fb0e153c5e533d215616ab971682b60574ddffd30",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-five-tier-api-audit.md",
+      "sha256": "b1a2b3c7f96c067c0d237297432de9de0189615f3ccbeb9bb28f86e584b7bad7",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-publish-after-verification.md",
+      "sha256": "430a2a40c3a081ed8da5770db5f9c842ed3803f7e3156394dac3accd4277fe75",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-upstream-five-tier-research.md",
+      "sha256": "e90835130e6ee13337781d5b6050a9fef0f315caf58a03090d86292208001b6e",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-free-first-escalation-design.md",
+      "sha256": "e50e58f1978ef62841c39e3983a234b69d360fbc486bc930a9846e16b5f5d5cf",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-callback-implementation-authorization.md",
+      "sha256": "b94a2bd9fea9cdcb8d9379ff03537b4fc9319640775973295351c24a1d322b3b",
+      "ingested": "2026-09-22"
+    },
+    {
+      "path": "raw/notes/2026-09-22-callback-acceptance.md",
+      "sha256": "26d49fdeaa36f08f87df4092acc56fe2f4592bf0380cce0be1c555e2df496bd4",
+      "ingested": "2026-09-22"
     }
   ]
 }

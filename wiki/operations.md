@@ -1,5 +1,7 @@
 # Operations and GitHub workflow
 
+Current scope (2026-09-22): [free-first callback implementation](semantic-routing-alternative.md) passes offline tests; two independent clean reviews are recorded in the [acceptance receipt](../raw/notes/2026-09-22-callback-acceptance.md). Historical source descriptions below retain their dates and are superseded where that page differs. OAuth/login, deployment and live subscription compatibility remain unverified.
+
 Status: source-derived operating guide, 2026-09-20; deployment steps are pending validation.
 Sources: [config](../raw/config.yaml), [classifier](../raw/jev_classifier.py),
 [quota guard](../raw/openrouter_quota_guard.py), [discovery](../raw/discover-free-models.py),
@@ -98,3 +100,62 @@ Publishing the repository does not deploy the proxy. No license has been selecte
 do not invent the owner's licensing terms.
 
 Related: [workflow](workflow.md), [decisions](decisions.md), [log](log.md).
+
+## ChatGPT OAuth persistence — prepared setup, 2026-09-22
+
+[Scope and version evidence](../raw/notes/2026-09-22-twenty-tier-scope.md).
+No container definition or accessible deployment host is provided. Apply these
+settings to the existing LiteLLM service on its actual host; this is a fragment,
+not a standalone deployment:
+
+```yaml
+services:
+  litellm:
+    environment:
+      CHATGPT_TOKEN_DIR: /app/chatgpt-auth
+    volumes:
+      - /mnt/user/appdata/litellm/chatgpt-auth:/app/chatgpt-auth
+```
+
+Create the host directory with access for the container user. Keep it writable
+for token refresh, private, outside Git, and separate from the config mount.
+Keep the twelve new deployments in YAML with `model_info.mode: responses`.
+The repository ignores `chatgpt-auth/` for an equivalent local directory.
+
+After recreating the intended service with the persistent mount, authenticate
+interactively inside that container (replace `LiteLLM` with its actual name):
+
+```sh
+docker exec -it LiteLLM python -c "from litellm.llms.chatgpt.authenticator import Authenticator; Authenticator().get_access_token(); print('ChatGPT authentication complete')"
+```
+
+Complete the displayed device flow yourself. This command deliberately does not
+print or retain the returned token. Do not paste auth.json or tokens into chat.
+Authentication is separate from inference: no model call is needed to save tokens.
+Verify that the private file persists across a container recreation before using
+live routes. Authentication, restart persistence, model availability and streaming
+have not been verified in this task.
+
+Historical [issue 28044](https://github.com/BerriAI/litellm/issues/28044) reports a
+DB-registration/streaming difference in older releases. It supports keeping these
+entries in YAML; it is not proof of an active defect in 1.99.0.
+
+The twenty-tier config currently hits LiteLLM's eight-tier validation cap. Resolve
+that recorded compatibility blocker before loading it into a service. This branch
+excludes the separate strict-cost implementation.
+
+## Callback offline verification (2026-09-22)
+
+Use Python 3.12 with [requirements](../requirements.txt). From the repository root:
+
+```powershell
+.venv312\Scripts\python.exe -m unittest tools.test_callback_routing tools.test_twenty_tiers tools.test_routing_signal_api
+py -3 tools/check_workspace.py
+```
+
+Tests substitute classifier/quota HTTP and solver transports; no provider keys or
+live model calls are needed. A local tiktoken cache may be required on first import;
+`outputs/token-cache` is used by the suites. Never treat offline success as model
+availability proof. Keep the repository root on PYTHONPATH when launching the proxy
+with `router/config.yaml`, so the `router.jev_router` callback and provider load.
+No proxy launch, database migration or OAuth login is part of this verification.

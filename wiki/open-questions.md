@@ -1,5 +1,7 @@
 # Open questions and verification gaps
 
+Current design reference: [free-first callback design](semantic-routing-alternative.md). Exact failure-to-subscription mappings, error/retry policy, direct-subscription fallback chains, quota/classifier failures and paid API controls remain unresolved. Earlier Auto Router compatibility blockers below are historical rationale for the callback proposal, not a claim that it has been implemented.
+
 Status: unresolved source findings, 2026-09-20. No router behavior was changed during ingestion.
 
 | ID | Finding and evidence | Next verification or decision |
@@ -22,3 +24,35 @@ broader rewrite. Next implementation work should select a concrete gap and recor
 its intended behavior through the [wiki workflow](workflow.md).
 
 Related: [decisions](decisions.md), [operations](operations.md), [evaluation](evaluation.md).
+
+## Twenty-tier operational gaps — 2026-09-22
+
+[Scope evidence](../raw/notes/2026-09-22-twenty-tier-scope.md): ChatGPT access to the requested Luna/Terra/Sol IDs, actual OAuth persistence/restart, Responses streaming and subscription limits remain unverified. No container definition/remote host is supplied. Issue #28044 is historical reported evidence, not a verified defect in the installed version. The existing sixteen-case benchmark covers only lower tiers and is not twenty-class quality evidence.
+
+## Blocking LiteLLM tier cap
+
+[Reproduction](../raw/notes/2026-09-22-tier-limit-evidence.md): installed 1.99.0 and upstream main cap custom definitions at eight. Twenty-tier configuration currently fails validation. Compatibility approach awaits user direction; model access is a separate unresolved issue.
+
+## Required input and review defects
+
+[Failed-state audit](../raw/notes/2026-09-22-expanded-tiers-blocked-audit.md): a supported twenty-tier LiteLLM approach or explicit revised compatibility authorization is needed. Both independent reviews are not clean. Draft CAPABLE semantics must be restored and failure tests added after the stop condition is resolved. Top-level jev quota behavior versus eventual ChatGPT-route isolation is a distinct scope question.
+
+## Five-tier design: two installed API prerequisites missing
+
+[Audit](../raw/notes/2026-09-22-five-tier-api-audit.md): LiteLLM 1.99.0 rejects plugins with custom tier definitions even for five tiers; its custom classifier accepts only a tier string and does not forward family signals/metadata to the filter. Router-level plugins run too early on provider model candidates. A signal-only compatibility change would not resolve custom-tier/plugin incompatibility. Stop pending supported interfaces or revised scope; never patch the tier cap.
+
+## Upgrade investigation and alternative choice
+
+[Fresh upstream research](../raw/notes/2026-09-22-upstream-five-tier-research.md) finds no supported upgrade in v1.102.0 or inspected main. [Concrete callback alternative](semantic-routing-alternative.md) awaits user choice because five capability levels would become application policy, not built-in Auto Router tiers. Independent proposal review also identified a fallback-root change that must be preserved explicitly and verified before any implementation is accepted.
+
+## Current resolutions — 2026-09-22
+
+The user authorized the callback alternative in [R007](decisions.md); earlier
+awaiting-choice and blocked-draft statements above are historical. Current YAML
+uses no complexity Auto Router. CAPABLE wording is restored and regression-tested.
+Q001 now has a pinned offline dependency set and callback/Router tests, but database,
+deployment and live compatibility remain open. Q006 stale snapshot handling is
+fixed and tested as unknown; multi-worker quota reservation remains unresolved.
+The current [implementation boundaries](semantic-routing-alternative.md) cover the
+accepted fallback changes and narrow supported input surface. Live model quality,
+model slug availability and OAuth remain open; no login was performed.

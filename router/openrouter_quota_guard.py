@@ -1,44 +1,9 @@
-"""
-openrouter_quota_guard.py
+"""OpenRouter free solver quota policy and response headers.
 
-LiteLLM callback for OpenRouter free-model quota visibility + paid bypass.
-
-Behavior
---------
-AVAILABLE / WARNING / CRITICAL:
-    Leave free-first aliases unchanged.
-
-EXHAUSTED (or remaining <= OPENROUTER_QUOTA_BLOCK_REMAINING):
-    Rewrite known free aliases to paid aliases BEFORE LiteLLM routing.\n    Community LiteLLM allows only one operator-defined auto-router, so\n    exhausted top-level `jev` traffic is routed to the universal paid\n    safety model `paid-general-capable` (DeepSeek V4 Flash).
-    Example:
-        jev -> paid-general-capable
-        free-coding-capable -> paid-coding-capable
-        fast -> paid-fast
-
-Concrete :free model IDs with no explicit alias mapping are blocked rather than
-blindly stripping ":free", because an exact paid sibling is not guaranteed.
-
-Environment
------------
-OPENROUTER_API_KEY                         required
-OPENROUTER_QUOTA_CACHE_SECONDS=30
-OPENROUTER_QUOTA_WARN_PERCENT=80
-OPENROUTER_QUOTA_CRITICAL_PERCENT=90
-OPENROUTER_QUOTA_BLOCK_REMAINING=0
-OPENROUTER_QUOTA_FAIL_OPEN=true
-OPENROUTER_QUOTA_EXHAUSTED_ACTION=route    # route | block
-
-If BLOCK_REMAINING=25, the final 25 free calls are effectively reserved and
-normal traffic switches to paid early.
-
-Response headers
-----------------
-x-openrouter-free-used
-x-openrouter-free-limit
-x-openrouter-free-remaining
-x-openrouter-free-percent
-x-openrouter-free-status
-x-openrouter-quota-cache-age
+Known exhausted family aliases skip to advanced-<family>; specialists retain
+original paid mappings. The semantic callback classifies jev before invoking this
+guard. Unknown or stale quota follows OPENROUTER_QUOTA_FAIL_OPEN (default true).
+Subscription aliases bypass OpenRouter quota. This is not a spending limit.
 """
 
 from __future__ import annotations
@@ -55,24 +20,43 @@ from litellm.integrations.custom_logger import CustomLogger
 
 OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key"
 
+# These semantic aliases are ChatGPT deployments in the working YAML.
+CHATGPT_ALIASES = {
+    f"{level}-{family}"
+    for level in ("advanced", "expert", "frontier")
+    for family in ("general", "reasoning", "agentic", "coding")
+}
+
+
+def _is_chatgpt_request(data: dict, response: Any = None) -> bool:
+    model = str(data.get("model", "")).strip()
+    params = data.get("litellm_params") or {}
+    hidden = getattr(response, "_hidden_params", None) or {}
+    return (
+        model in CHATGPT_ALIASES
+        or model.startswith("chatgpt/")
+        or data.get("custom_llm_provider") == "chatgpt"
+        or params.get("custom_llm_provider") == "chatgpt"
+        or hidden.get("custom_llm_provider") == "chatgpt"
+    )
+
 DEFAULT_ROUTE_MAP = {
-    "jev": "paid-general-capable",
-    "free-general-efficient": "paid-general-efficient",
-    "free-general-efficient-backup": "paid-general-efficient-backup",
-    "free-general-capable": "paid-general-capable",
-    "free-general-capable-backup": "paid-general-capable-backup",
-    "free-reasoning-efficient": "paid-reasoning-efficient",
-    "free-reasoning-efficient-backup": "paid-reasoning-efficient-backup",
-    "free-reasoning-capable": "paid-reasoning-capable",
-    "free-reasoning-capable-backup": "paid-reasoning-capable-backup",
-    "free-agentic-efficient": "paid-agentic-efficient",
-    "free-agentic-efficient-backup": "paid-agentic-efficient-backup",
-    "free-agentic-capable": "paid-agentic-capable",
-    "free-agentic-capable-backup": "paid-agentic-capable-backup",
-    "free-coding-efficient": "paid-coding-efficient",
-    "free-coding-efficient-backup": "paid-coding-efficient-backup",
-    "free-coding-capable": "paid-coding-capable",
-    "free-coding-capable-backup": "paid-coding-capable-backup",
+    "free-general-efficient": "advanced-general",
+    "free-general-efficient-backup": "advanced-general",
+    "free-general-capable": "advanced-general",
+    "free-general-capable-backup": "advanced-general",
+    "free-reasoning-efficient": "advanced-reasoning",
+    "free-reasoning-efficient-backup": "advanced-reasoning",
+    "free-reasoning-capable": "advanced-reasoning",
+    "free-reasoning-capable-backup": "advanced-reasoning",
+    "free-agentic-efficient": "advanced-agentic",
+    "free-agentic-efficient-backup": "advanced-agentic",
+    "free-agentic-capable": "advanced-agentic",
+    "free-agentic-capable-backup": "advanced-agentic",
+    "free-coding-efficient": "advanced-coding",
+    "free-coding-efficient-backup": "advanced-coding",
+    "free-coding-capable": "advanced-coding",
+    "free-coding-capable-backup": "advanced-coding",
     "fast": "paid-fast",
     "fast-backup": "paid-fast-backup",
     "vision": "paid-vision",
@@ -271,8 +255,8 @@ class OpenRouterQuotaGuard(CustomLogger):
                     flush=True,
                 )
 
-            # Fail-open can use a stale known snapshot.
-            return self._snapshot
+            # An expired snapshot cannot establish today's eligibility.
+            return None
 
     def _status(
         self,
@@ -341,7 +325,7 @@ class OpenRouterQuotaGuard(CustomLogger):
         call_type,
         **kwargs,
     ):
-        if not self._is_free_request(data):
+        if _is_chatgpt_request(data) or not self._is_free_request(data):
             return data
 
         snapshot = await self._get_snapshot()
@@ -395,6 +379,8 @@ class OpenRouterQuotaGuard(CustomLogger):
         request_headers=None,
         **kwargs,
     ):
+        if _is_chatgpt_request(data, response):
+            return {}
         snapshot = await self._get_snapshot()
 
         if snapshot is None:

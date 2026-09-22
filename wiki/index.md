@@ -1,15 +1,21 @@
 # Project wiki
 
-Status: source-ingested baseline, 2026-09-20; runtime integration remains unverified.
+Status: free-first callback implementation passes offline routing tests, 2026-09-22;
+two independent clean reviews are recorded in the [acceptance receipt](../raw/notes/2026-09-22-callback-acceptance.md). Start with the [current design](semantic-routing-alternative.md).
+The eight lower primary aliases stay free; Luna follows exhausted free attempts,
+then existing paid API fallbacks. Twenty semantic classes remain first-class.
+No deployment or live model verification is claimed.
 
 ## Understand the router
 
 - [Architecture](architecture.md): components, request paths, and trust boundaries.
-- [Routing policy](routing.md): eight tiers, aliases, fallbacks, and targets.
+- [Routing policy](routing.md): baseline and proposed free-first escalation policy.
 - [Jev classifier](classifier.md): transcript selection and failure behavior.
 - [Quota guard](quota-guard.md): quota lookup, paid rewrites, and response headers.
 - [Evaluation](evaluation.md): discovery, route health, and classifier benchmarking.
 - [Vocabulary](../CONTEXT.md): shared domain terms.
+
+- [Free-first callback architecture](semantic-routing-alternative.md): current proposed flow, twenty semantic classes, model roster, escalation policy and verification gate.
 
 ## Work consistently
 
