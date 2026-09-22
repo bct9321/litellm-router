@@ -6,6 +6,7 @@ litellm_settings:
   check_provider_endpoint: true
   drop_params: true
   callbacks:
+  - cost_guard.proxy_handler_instance
   - openrouter_quota_guard.proxy_handler_instance
 router_settings:
   num_retries: 0

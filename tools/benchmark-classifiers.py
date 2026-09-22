@@ -39,6 +39,7 @@ Rate limiting:
 from __future__ import annotations
 
 import json
+import math
 import os
 import statistics
 import sys
@@ -533,15 +534,27 @@ def get_cost(data: dict[str, Any]) -> float | None:
 
     usage = data.get("usage") or {}
 
-    cost = usage.get("cost")
+    cost = usage.get("cost") if isinstance(usage, dict) else None
 
-    if cost is None:
+    if cost is None or isinstance(cost, bool):
         return None
 
     try:
-        return float(cost)
+        value = float(cost)
+        return value if math.isfinite(value) and value >= 0 else None
     except (TypeError, ValueError):
         return None
+
+
+def response_cost(response: httpx.Response) -> float | None:
+    try:
+        data = response.json()
+        provider_cost = get_cost(data) if isinstance(data, dict) else None
+        if provider_cost is not None:
+            return provider_cost
+    except ValueError:
+        pass
+    return get_cost({'usage': {'cost': response.headers.get('x-litellm-response-cost')}})
 
 
 # =============================================================================
@@ -613,87 +626,23 @@ def pace_if_free(model: str) -> None:
 # =============================================================================
 
 
-def classify_jev(
-    client: httpx.Client,
-    test: TestCase,
-) -> dict[str, Any]:
+def classify_jev(client: httpx.Client, test: TestCase) -> dict[str, Any]:
+    """Evaluate the production classifier including its transcript and failures."""
+    import asyncio
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from router.jev_classifier import OpenRouterJevClassifier
 
-    transcript = (
-        f"SYSTEM / PROFILE:\n{test.system}\n\n"
-        f"USER REQUEST:\n{test.user}"
-    )
-
-    criteria = {
-        tier: TIER_DESCRIPTIONS[tier]
-        for tier in TIERS
-    }
-
-    payload = {
-        "model": JEV_MODEL,
-
-        "state": {
-            "description": (
-                "A Hermes agent request that must be assigned "
-                "to one routing tier."
-            ),
-            "record": transcript,
-        },
-
-        "questions": {
-            "routing_tier": {
-                "type": "choice",
-                "instructions": (
-                    "Choose the single best routing tier for this request. "
-                    "Coding takes precedence when software implementation "
-                    "or modification is explicitly requested."
-                ),
-                "criteria": criteria,
-            }
-        },
-    }
-
+    diagnostics: dict[str, Any] = {}
     started = time.perf_counter()
-
-    response = client.post(
-        "https://openrouter.ai/api/alpha/decisions",
-        json=payload,
-        timeout=TIMEOUT,
-    )
-
-    latency = time.perf_counter() - started
-
-    if response.status_code != 200:
-
-        return {
-            "ok": False,
-            "latency": latency,
-            "prediction": None,
-            "cost": None,
-            "error": (
-                f"HTTP {response.status_code}: "
-                f"{response.text[:300]}"
-            ),
-        }
-
-    data = response.json()
-
-    answers = data.get("answers", {})
-
-    answer = answers.get("routing_tier", {})
-
-    prediction = normalize_tier(
-        answer.get("choice")
-    )
-
-    return {
-        "ok": prediction is not None,
-        "latency": latency,
-        "prediction": prediction,
-        "cost": get_cost(data),
-        "confidence": answer.get("confidence"),
-        "probabilities": answer.get("probabilities"),
-        "error": None if prediction else str(data)[:300],
-    }
+    prediction = asyncio.run(OpenRouterJevClassifier().classify(
+        {"raw_messages": [{"role": "system", "content": test.system},
+                          {"role": "user", "content": test.user}]},
+        diagnostics=diagnostics,
+    ))
+    return {**diagnostics, "latency": time.perf_counter() - started,
+            "prediction": prediction if diagnostics["ok"] else None,
+            "error": None if diagnostics["ok"] else "production classifier fallback"}
 
 
 # =============================================================================
@@ -759,7 +708,7 @@ def classify_chat(
             "ok": False,
             "latency": latency,
             "prediction": None,
-            "cost": None,
+            "cost": response_cost(response),
             "error": (
                 f"HTTP {response.status_code}: "
                 f"{response.text[:300]}"
@@ -859,7 +808,7 @@ def classify_litellm_chat(
             "ok": False,
             "latency": latency,
             "prediction": None,
-            "cost": None,
+            "cost": response_cost(response),
             "provider": None,
             "error": (
                 f"HTTP {response.status_code}: "
@@ -1041,8 +990,12 @@ def summarize(
 
     costs = [
         x["cost"]
-        for x in successful
+        for x in results
         if x.get("cost") is not None
+        and isinstance(x["cost"], (int, float))
+        and not isinstance(x["cost"], bool)
+        and math.isfinite(x["cost"])
+        and x["cost"] >= 0
     ]
 
     total = len(results)
@@ -1096,13 +1049,17 @@ def summarize(
 
         "total_cost": (
             sum(costs)
-            if costs
+            if costs and len(costs) == total
             else None
         ),
 
+        "known_cost": sum(costs) if costs else None,
+        "unknown_cost_requests": total - len(costs),
+        "cost_coverage": len(costs) / total if total else None,
+
         "avg_cost": (
             statistics.mean(costs)
-            if costs
+            if costs and len(costs) == total
             else None
         ),
     }

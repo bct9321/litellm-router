@@ -69,4 +69,21 @@ These tools answer different questions and must not be substituted for each othe
 Consequence: successful discovery does not prove deployed alias health, and a
 classifier benchmark does not certify the runtime plugin's transcript handling.
 
+## P001 — Reuse LiteLLM accounting for cost-aware Jev
+
+Status: accepted and implemented locally, 2026-09-21; live provider billing remains unresolved.
+Evidence: [research request and sources](../raw/notes/2026-09-21-cost-aware-router-research.md),
+[alternatives](../raw/notes/2026-09-21-other-routers-research.md).
+
+Prefer the existing gateway's accounting and supported controls, with a small
+server-computed cost snapshot and deterministic eligibility layer. Reason:
+selection, spend reporting and budget enforcement are separate responsibilities;
+alternative-router research did not establish a migration benefit. Consequences:
+pin/verify version and edition, reconcile classifier and fallback costs, and
+preserve free-first behavior. See [proposed design](cost-awareness.md).
+
 Related: [architecture](architecture.md), [evaluation](evaluation.md), [open questions](open-questions.md).
+
+## W005 — Strict cost-aware local delivery
+
+Accepted 2026-09-21 from [user contract](../raw/notes/2026-09-21-cost-aware-router-contract.md). Enforce budgets by canonical model across every dispatch; reserve bounded charges atomically and retain unresolved exposure. Preserve free-first capability-compatible fallbacks. Reuse pinned LiteLLM facilities where verified, implement only gaps. No live changes or charges; real local integration and two consecutive clean independent reviews gate completion. Local implementation, integration proof and two consecutive clean independent reviews passed; the full goal remains incomplete due to the live billing-contract blocker. See [receipt](../raw/notes/2026-09-21-local-delivery-receipt.md).

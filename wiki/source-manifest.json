@@ -42,6 +42,41 @@
       "sha256": "6d11217518547628669c6669a29f8d568a8935e99be1a58d7d9df49569db6e18",
       "ingested": "2026-09-20",
       "working_copy": "tools/test-models.py"
+    },
+    {
+      "path": "raw/notes/2026-09-21-cost-aware-router-research.md",
+      "sha256": "d1c3d7a0d3ee6e696d74a043c3e27ab0a1009e4078f0dc507db639e91135b424",
+      "ingested": "2026-09-21"
+    },
+    {
+      "path": "raw/notes/2026-09-21-other-routers-research.md",
+      "sha256": "50a2e703ced3a1331cf0afdb1e660a4e1f7fd43c5f420512bc10637c973dd048",
+      "ingested": "2026-09-21"
+    },
+    {
+      "path": "raw/notes/2026-09-21-cost-aware-router-contract.md",
+      "sha256": "18306608ddd955b17bfccbb2b9e2d2140877cd5cf44a33be3c02fc5e6cf8db55",
+      "ingested": "2026-09-21"
+    },
+    {
+      "path": "raw/notes/2026-09-21-router-review-plan-evidence.md",
+      "sha256": "4659215396ff857e28b502aa0c0b6ac8d4261bb3bdfdd58922091838c6435ca0",
+      "ingested": "2026-09-21"
+    },
+    {
+      "path": "raw/notes/2026-09-21-router-plan-execution.md",
+      "sha256": "b30b11d8f9d2e7635281a02890a2384066b4226c178bde30f9b8438bd9661ea8",
+      "ingested": "2026-09-21"
+    },
+    {
+      "path": "raw/notes/2026-09-21-local-delivery-receipt.md",
+      "sha256": "6a4aaecc38b95449adbaa9f534583a45894216f89f1725a418f2d1ae956243c3",
+      "ingested": "2026-09-21"
+    },
+    {
+      "path": "raw/notes/2026-09-21-pull-request-authorization.md",
+      "sha256": "c64a527a1f24d85bd2a2dee36f0b79f23ce6118af7a917c93498e382854323bc",
+      "ingested": "2026-09-21"
     }
   ]
 }

@@ -44,6 +44,7 @@ x-openrouter-quota-cache-age
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 from typing import Any, Optional
@@ -53,7 +54,7 @@ from fastapi import HTTPException
 from litellm.integrations.custom_logger import CustomLogger
 
 
-OPENROUTER_KEY_URL = "https://openrouter.ai/api/v1/key"
+OPENROUTER_KEY_URL = os.getenv("OPENROUTER_KEY_URL", "https://openrouter.ai/api/v1/key")
 
 DEFAULT_ROUTE_MAP = {
     "jev": "paid-general-capable",
@@ -161,9 +162,16 @@ class OpenRouterQuotaGuard(CustomLogger):
             self.exhausted_action = "route"
 
         self.route_map = dict(DEFAULT_ROUTE_MAP)
+        try:
+            configured_routes = json.loads(os.getenv('OPENROUTER_QUOTA_ROUTE_MAP', '{}'))
+            if isinstance(configured_routes, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in configured_routes.items()):
+                self.route_map.update(configured_routes)
+        except (TypeError, ValueError):
+            pass
         self.free_aliases = set(self.route_map)
 
         self._snapshot: Optional[QuotaSnapshot] = None
+        self._next_refresh_at = 0.0
         self._lock = asyncio.Lock()
         self._last_logged_status: Optional[str] = None
 
@@ -231,9 +239,10 @@ class OpenRouterQuotaGuard(CustomLogger):
         limit = quota.get("limit")
         remaining = quota.get("remaining")
 
-        if used is None or limit is None or remaining is None:
+        if (any(type(value) is not int or value < 0 for value in (used, limit, remaining))
+                or used > limit or remaining != limit - used):
             print(
-                f"[OPENROUTER QUOTA] incomplete quota object {quota}",
+                "[OPENROUTER QUOTA] invalid quota counts",
                 flush=True,
             )
             return None
@@ -260,6 +269,12 @@ class OpenRouterQuotaGuard(CustomLogger):
             if not force and self._snapshot_is_fresh():
                 return self._snapshot
 
+            # Failed/missing refreshes are cached too. Never label stale values
+            # as current or let repeated requests hammer an unavailable endpoint.
+            if time.monotonic() < self._next_refresh_at:
+                return None
+            self._next_refresh_at = time.monotonic() + self.cache_seconds
+
             try:
                 refreshed = await self._refresh_snapshot()
                 if refreshed is not None:
@@ -271,8 +286,7 @@ class OpenRouterQuotaGuard(CustomLogger):
                     flush=True,
                 )
 
-            # Fail-open can use a stale known snapshot.
-            return self._snapshot
+            return None
 
     def _status(
         self,
@@ -367,6 +381,9 @@ class OpenRouterQuotaGuard(CustomLogger):
             paid_model = self.route_map.get(original_model)
 
             if paid_model:
+                if os.getenv('COST_ROUTER_CONFIG'):
+                    from router.cost_transport import mark_quota_unavailable
+                    mark_quota_unavailable(data.get('metadata'))
                 data["model"] = paid_model
 
                 print(

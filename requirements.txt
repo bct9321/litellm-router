@@ -1,0 +1,3 @@
+# Runtime requires Python >=3.11 (verified target: 3.12).
+litellm[proxy]==1.99.0
+jsonschema==4.26.0

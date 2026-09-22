@@ -379,7 +379,7 @@ def supported_parameters(model: dict[str, Any]) -> set[str]:
 
 
 def price_is_zero(value: Any) -> bool:
-    if value is None:
+    if value is None or isinstance(value, bool):
         return False
     try:
         return float(value) == 0.0
@@ -393,7 +393,7 @@ def is_zero_cost_model(model: dict[str, Any]) -> bool:
     return (
         price_is_zero(pricing.get("prompt"))
         and price_is_zero(pricing.get("completion"))
-        and price_is_zero(pricing.get("request", "0"))
+        and price_is_zero(pricing.get("request"))
     )
 
 
@@ -422,7 +422,8 @@ def price_per_million(
         return None
 
     try:
-        return float(value) * 1_000_000.0
+        price = float(value) * 1_000_000.0
+        return price if math.isfinite(price) and price >= 0 and not isinstance(value, bool) else None
     except (TypeError, ValueError):
         return None
 
@@ -431,9 +432,9 @@ def normalized_pricing(model: dict[str, Any]) -> dict[str, Any]:
     return {
         "prompt_per_million": price_per_million(model, "prompt"),
         "completion_per_million": price_per_million(model, "completion"),
-        "request": safe_float(
-            (model.get("pricing") or {}).get("request"),
-            0.0,
+        "request": (
+            price_per_million(model, "request") / 1_000_000.0
+            if price_per_million(model, "request") is not None else None
         ),
     }
 
@@ -1438,7 +1439,7 @@ def probe_vision(
                             "text": (
                                 "Identify the dominant color "
                                 "of this image. "
-                                "End with exactly FINAL=red"
+                                "End with FINAL=<color-name>."
                             ),
                         },
                         {
@@ -2213,6 +2214,12 @@ def score_for_tier(
     if summary.get("variant") == "paid":
         input_price = pricing.get("prompt_per_million")
         output_price = pricing.get("completion_per_million")
+
+        if any(not isinstance(value, (int, float)) or isinstance(value, bool)
+               or not math.isfinite(value) or value < 0
+               for value in (input_price, output_price, pricing.get("request"))):
+            paid_price_ok = False
+            reasons.append("paid price unknown or invalid")
 
         if (
             MAX_PAID_INPUT_PER_M > 0

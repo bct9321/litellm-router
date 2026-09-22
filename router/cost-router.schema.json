@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Cost-aware LiteLLM router policy",
+  "type": "object",
+  "required": [
+    "ledger",
+    "limits",
+    "contracts",
+    "routes",
+    "deployments"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "limit": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9223372036854775807
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "canonical",
+        "origin",
+        "input_nanos_per_token",
+        "output_nanos_per_token",
+        "max_output_tokens",
+        "path",
+        "valid_from",
+        "expires_at",
+        "revision",
+        "evidence_ref",
+        "supported_surfaces",
+        "final_usage_rule"
+      ],
+      "properties": {
+        "kind": {
+          "const": "loopback-fixed-bound"
+        },
+        "canonical": {
+          "type": "string",
+          "minLength": 1
+        },
+        "origin": {
+          "type": "string",
+          "pattern": "^http://127\\.0\\.0\\.1:[0-9]+$"
+        },
+        "input_nanos_per_token": {
+          "$ref": "#/$defs/limit"
+        },
+        "output_nanos_per_token": {
+          "$ref": "#/$defs/limit"
+        },
+        "fixed_overhead_nanos": {
+          "$ref": "#/$defs/limit"
+        },
+        "max_output_tokens": {
+          "$ref": "#/$defs/limit"
+        },
+        "deployment": {
+          "type": "string",
+          "minLength": 1
+        },
+        "alias": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "valid_from": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expires_at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "supported_surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "text-chat",
+              "decisions"
+            ]
+          }
+        },
+        "final_usage_rule": {
+          "const": "complete-response-cost"
+        },
+        "provider_model": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "alias",
+        "canonical",
+        "capabilities",
+        "free",
+        "deployment_ids"
+      ],
+      "properties": {
+        "alias": {
+          "type": "string",
+          "minLength": 1
+        },
+        "canonical": {
+          "type": "string",
+          "minLength": 1
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "free": {
+          "type": "boolean"
+        },
+        "contract": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deployment_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  },
+  "properties": {
+    "ledger": {
+      "type": "string",
+      "minLength": 1
+    },
+    "limits": {
+      "type": "object",
+      "required": [
+        "daily",
+        "monthly",
+        "request",
+        "models"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "daily": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "monthly": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "request": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "daily",
+              "monthly"
+            ],
+            "properties": {
+              "daily": {
+                "$ref": "#/$defs/limit"
+              },
+              "monthly": {
+                "$ref": "#/$defs/limit"
+              }
+            }
+          }
+        }
+      }
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/contract"
+      }
+    },
+    "routes": {
+      "type": "object",
+      "required": [
+        "jev"
+      ],
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidates"
+        ],
+        "properties": {
+          "required_capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "candidates": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/$defs/candidate"
+            }
+          }
+        }
+      }
+    },
+    "classifier": {
+      "$ref": "#/$defs/contract"
+    },
+    "history_model_map": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "deployments": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "alias",
+          "provider_model",
+          "contract",
+          "capabilities",
+          "free"
+        ],
+        "properties": {
+          "alias": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provider_model": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contract": {
+            "type": "string",
+            "minLength": 1
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "free": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "billing_scope": {
+      "type": "string",
+      "minLength": 1
+    },
+    "coverage_mode": {
+      "enum": [
+        "router-only",
+        "provider-period"
+      ]
+    }
+  }
+}
